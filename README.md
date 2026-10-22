@@ -14,7 +14,7 @@
 </div>
 
 <p align="center">
-  <img src="docs/screenshot-home.png" width="49%" alt="1792225833936" />
+  <img src="docs/1792225833936.png" width="49%" alt="1792225833936" />
   <img src="docs/screenshot-chat.png" width="49%" alt="Harness Gemini 对话界面" />
 </p>
 
