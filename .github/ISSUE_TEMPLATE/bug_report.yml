@@ -1,0 +1,36 @@
+name: 问题反馈
+description: 报告安装、界面或功能问题
+title: "[问题] "
+body:
+  - type: input
+    id: version
+    attributes:
+      label: 应用版本
+      placeholder: 例如 1.3.10
+    validations:
+      required: true
+  - type: input
+    id: system
+    attributes:
+      label: Windows 版本
+      placeholder: 例如 Windows 11 x64
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: 复现步骤
+      description: 从打开程序开始，说明如何遇到问题。
+    validations:
+      required: true
+  - type: textarea
+    id: behavior
+    attributes:
+      label: 预期行为与实际结果
+    validations:
+      required: true
+  - type: textarea
+    id: evidence
+    attributes:
+      label: 截图或必要的错误信息
+      description: 请先删除 API Key、私人对话、本机用户名等不需要公开的信息。

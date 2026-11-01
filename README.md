@@ -1,155 +1,81 @@
-<div align="center">
-
 # Harness Gemini
 
-**你的本地 AI 工作台：聊天、生图、编程、浏览网页，一个窗口全搞定。**
+Windows 桌面 AI 工作台，在一个窗口中聊天、编程、生图和浏览网页。
 
-[![Release](https://img.shields.io/github/v/release/gylidianh/harness-gemini?style=flat-square&color=1a73e8)](https://github.com/gylidianh/harness-gemini/releases/latest)
-[![Downloads](https://img.shields.io/github/downloads/gylidianh/harness-gemini/total?style=flat-square&color=34a853)](https://github.com/gylidianh/harness-gemini/releases)
-![Platform](https://img.shields.io/badge/platform-Windows%20x64-0078d4?style=flat-square&logo=windows)
-![Electron](https://img.shields.io/badge/built%20with-Electron-47848f?style=flat-square&logo=electron)
+[![版本](https://img.shields.io/github/v/release/gylidianh/harness-gemini)](https://github.com/gylidianh/harness-gemini/releases/latest)
+![Windows x64](https://img.shields.io/badge/Windows-10%20%2F%2011%20x64-0078d4)
 
-[下载](#-下载) · [功能](#-功能特性) · [快速开始](#-快速开始) · [数据与隐私](#-数据与隐私) · [常见问题](#-常见问题)
+**[下载 1.3.10 安装包](https://github.com/gylidianh/harness-gemini/releases/download/v1.3.10/Harness-Gemini-1.3.10-win-x64.exe)** · [版本说明](CHANGELOG.md) · [使用指南](docs/usage.md) · [常见问题](docs/faq.md)
 
-</div>
+![Harness Gemini 1.3.10 主界面](docs/images/home-1.3.10.png)
 
-<p align="center">
-  <img src="docs/1792225833936.png" width="49%" alt="1792225833936" />
-  <img src="docs/screenshot-chat.png" width="49%" alt="Harness Gemini 对话界面" />
-</p>
+## 功能
 
-## ✨ 功能特性
-
-### 🔌 接入任意模型
-- 支持三种接口协议：**OpenAI Chat Completions**（`/chat/completions`）、**Anthropic Messages**（`/v1/messages`）、**OpenAI Responses**（`/responses`）。
-- 可以保存多个连接，每个连接分别填写聊天、编程、生图模型，在输入框里随时切换。
-- 每个连接可以单独设置**推理等级**（低 / 中 / 高 / 模型默认）。模型不支持时自动不发送该参数，不会导致请求失败。
-
-### 💬 三种工作模式
-| 模式 | 能做什么 |
+| 功能 | 说明 |
 | --- | --- |
-| **聊天** | 连续对话、流式回复、搜索网页、读取资料，只用只读工具 |
-| **编程** | 读写文件、下载资料、执行命令，在独立的会话目录中完成任务 |
-| **生图** | 调用生图模型，图片自动保存到本机，可放大、下载、一键复制 |
+| 模型连接 | 支持 OpenAI Chat Completions、Anthropic Messages、OpenAI Responses 协议；可保存和切换多个连接 |
+| 聊天、编程、生图 | 为不同模式配置模型，在输入框工具栏中切换 |
+| 模型与思考等级 | 从工具栏选择模型；推理参数是否生效取决于模型和接口支持 |
+| 内置浏览器 | 多标签页、网页读取与交互，也可打开本地页面 |
+| 技能与子代理 | 管理外置技能，查看任务清单和子任务进度 |
+| 界面与上下文 | 五种主题、Markdown 与公式、附件、上下文占用和压缩设置 |
 
-### 🌐 内置浏览器
-- 多标签页浏览器，可以一边聊天一边看网页，也能打开本地 `file://` 页面。
-- 模型可以直接**打开、读取、点击、输入、滚动**网页，需要 JavaScript 渲染的页面也能读到。
-- 模型可以**截屏**并真正"看到"页面的排版、图表和颜色。
-- 不会替你登录，也不会绕过验证码。
+## 开始使用
 
-### 🤖 智能体能力
-- **任务清单**：多步骤任务会显示进度清单，做完的步骤自动划掉。
-- **子代理**：把独立的子任务并行交给子代理处理，权限和停止操作随主任务一起生效。
-- **外置技能**：把常用脚本（Python / JS / PowerShell）做成技能，模型会自己判断何时调用。自带 PDF 读取技能。
-- **上下文管理**：实时显示上下文占用，接近上限时自动压缩较早的历史。
+1. 下载并安装 Windows x64 版本，无需另外安装 Node.js。
+2. 打开左下角 **设置 → 供应商**，填写接口地址、协议和模型；需要鉴权的服务再填写 API Key。
+3. 点击 **保存并使用**，在输入框中选择模式、模型、权限和思考等级。
+4. 输入消息开始使用。右侧工作空间默认收起，可通过顶部面板按钮展开。
 
-### 🎨 细节体验
-- Markdown、代码块、表格、**LaTeX 数学公式**自动排版。
-- 思考过程默认折叠，显示 tokens/s 与耗时。
-- 5 套界面皮肤：Gemini 白、Gemini 暗、Claude 橘、鎏金黑、象牙金，切换立即生效。
-- 支持粘贴、拖拽附件，任务完成后弹出提醒并播放提示音。
+已有安装的用户，请先退出旧程序，再运行新安装包覆盖升级。设置、会话和工作目录继续保留。
 
-### 🔐 权限可控
-| 权限模式 | 说明 |
-| --- | --- |
-| **请求批准** | 每次写文件、执行命令前都要你确认 |
-| **帮我批准** | 自动放行搜索网页、读取网页、新建文件；覆盖文件、执行命令仍需确认 |
-| **完全访问权限** | 自动读写文件、运行命令并联网，适合你信任的任务 |
+详细步骤、文件校验和数据位置见 [使用指南](docs/usage.md)。
 
-## 📦 下载
+## 1.3.10 界面
 
-前往 [Releases](https://github.com/gylidianh/harness-gemini/releases/latest) 下载最新版本：
-
-| 文件 | 系统 | 说明 |
-| --- | --- | --- |
-| `Harness-Gemini-1.3.10-win-x64.exe` | Windows 10 / 11（64 位） | 安装版，可覆盖升级，保留已有设置和会话 |
-
-> 无需安装 Node.js 或其他运行环境，程序已自带。
-
-## 🚀 快速开始
-
-1. 下载 `Harness-Gemini-1.3.10-win-x64.exe`，双击并按提示安装。
-2. 点击左下角「内置浏览器」右侧的 **设置** 按钮，新建一个模型连接：
-   - 选择接口协议（Chat Completions / Anthropic Messages / Responses）
-   - 填写 **API 地址**（通常以 `/v1` 结尾）和 **API Key**
-   - 点击 **读取此连接的模型**，或手动填写聊天、编程、生图模型（至少填一个）
-3. 点击 **保存并使用**，回到主界面开始对话。
-4. 在输入框下方切换 **聊天 / 编程** 模式和权限；输入 `/` 可以调用技能或子代理。
-
-## 🔒 数据与隐私
-
-- **完全本地运行**：程序只在本机 `127.0.0.1` 启动服务，对话直接发往你自己配置的模型接口，不经过任何第三方服务器。
-- **数据保存在你的电脑上**：
-
-  | 内容 | 位置 |
-  | --- | --- |
-  | 设置、对话、图片、错误日志 | `%APPDATA%\Local Harness\data` |
-  | 会话工作目录 | `文档\Local Harness\workspace` |
-
-- **API Key 加密保存**：使用 Windows 系统密钥保护（DPAPI）加密后写入磁盘。
-- **发布包不含任何个人数据**：exe 里只有程序本身，没有任何配置、密钥或对话记录。
-
-## ❓ 常见问题
+输入工具栏集中显示附件、模式、权限、模型、思考等级和发送按钮；设置使用左侧分类、右侧内容的布局。
 
 <details>
-<summary><b>打开时 Windows 提示"已保护你的电脑"怎么办？</b></summary>
+<summary>查看输入工具栏</summary>
 
-程序没有购买代码签名证书，所以 SmartScreen 会提示。点击 **更多信息 → 仍要运行** 即可。也可以先核对文件的 SHA-256 校验值（见 Release 页面）。
+![输入工具栏](docs/images/composer-1.3.10.png)
+
 </details>
 
 <details>
-<summary><b>设置页里如何查看 API Key？</b></summary>
+<summary>查看设置与技能管理</summary>
 
-已保存的 Key 默认以掩码显示，需要时可在设置中主动查看。磁盘上仍使用 Windows 系统密钥保护加密保存。截图或录屏分享设置页时请遮挡已展开的密钥；删除密钥请使用设置中的清除操作。
+![设置与技能管理](docs/images/settings-1.3.10.png)
+
 </details>
 
-<details>
-<summary><b>支持哪些模型服务？</b></summary>
+以上截图来自独立演示环境，连接和模型名称为示例，不包含真实密钥、聊天记录或用户文件。
 
-任何兼容 OpenAI Chat Completions、Anthropic Messages 或 OpenAI Responses 接口的服务都可以，包括官方 API、各类中转服务，以及本地部署的模型（如 Ollama、LM Studio 等提供的兼容接口）。
-</details>
+## 数据与权限
 
-<details>
-<summary><b>编程模式执行命令安全吗？</b></summary>
+- 设置、会话和产物保存在本机。模型请求发送到你配置的服务；联网工具会访问对应网站。
+- 桌面版使用 Windows 系统密钥保护加密保存 API Key，已保存的密钥默认以掩码显示。
+- 工具操作受所选权限模式和审批结果控制。编程命令以当前 Windows 用户权限执行，会话目录不是系统沙箱。
+- 发布附件只包含程序与运行依赖，不携带维护者的本机配置、会话、日志或工作文件。
 
-命令以当前 Windows 用户的权限在本机执行。会话目录只是默认起点，不是系统沙箱。建议默认使用 **请求批准**，执行前先查看工具卡里的命令。
-</details>
+更多说明见 [数据位置与权限](docs/usage.md#数据位置与权限)。
 
-<details>
-<summary><b>怎么升级到新版本？卸载要删什么？</b></summary>
+## 下载、文档与反馈
 
-- **升级**：退出正在运行的旧版，运行新版安装包并覆盖安装，设置和对话会保留。
-- **卸载**：通过 Windows 的“已安装的应用”卸载程序；如需清除数据，再删除上面"数据与隐私"表格里的两个文件夹。
-</details>
+本仓库维护 Windows 安装包的发布入口和使用文档。
 
-<details>
-<summary><b>出错了在哪里看原因？</b></summary>
-
-失败原因会保存在对应消息上，重启后仍可查看和复制；同时会写入数据目录下的 `logs/errors.log`（菜单 **文件 → 打开错误日志**）。日志不含对话内容，密钥会自动隐藏。
-</details>
-
-## 📝 更新日志
-
-见 [Releases](https://github.com/gylidianh/harness-gemini/releases)。
+- [当前版本与全部下载](https://github.com/gylidianh/harness-gemini/releases/latest)
+- [更新记录](CHANGELOG.md)
+- [使用指南](docs/usage.md)
+- [常见问题](docs/faq.md)
+- [报告问题](https://github.com/gylidianh/harness-gemini/issues/new/choose)
+- [参与维护](CONTRIBUTING.md)
 
 ## 贡献者
 
 1. [@gylidianh](https://github.com/gylidianh)
 2. [@nexou9527](https://github.com/nexou9527)
 
-## 🙏 致谢
+## 致谢
 
-- [Electron](https://www.electronjs.org/)、[React](https://react.dev/)、[Vite](https://vite.dev/)、[Express](https://expressjs.com/)
-- [KaTeX](https://katex.org/)、[react-markdown](https://github.com/remarkjs/react-markdown)、[lucide](https://lucide.dev/)、[undici](https://github.com/nodejs/undici)
-- 内置浏览器界面、上下文统计与附件功能部分改编自 [ZCode](https://github.com/zai-org/ZCode)（Apache License 2.0）
-
-第三方组件的完整许可证随程序附带，见安装包内的 `THIRD-PARTY-NOTICES.md` 和 `third-party/` 目录。
-
----
-
-<div align="center">
-
-如果这个项目对你有帮助，欢迎点一个 ⭐ Star
-
-</div>
+项目使用 Electron、React、Express、KaTeX、react-markdown、lucide 和 undici 等组件。内置浏览器界面、上下文统计及附件功能部分改编自 [ZCode](https://github.com/zai-org/ZCode)。部分供应商图标来自 [LobeHub Icons](https://github.com/lobehub/lobe-icons) 和供应商站点。完整第三方许可与来源说明随程序附带，见 `THIRD-PARTY-NOTICES.md`、`third-party/` 和图标目录中的许可文件。
