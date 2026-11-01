@@ -63,13 +63,13 @@
 
 | 文件 | 系统 | 说明 |
 | --- | --- | --- |
-| `Harness-Gemini-1.0.0-win-x64.exe` | Windows 10 / 11（64 位） | 便携版，下载后双击即可运行，无需安装 |
+| `Harness-Gemini-1.3.10-win-x64.exe` | Windows 10 / 11（64 位） | 安装版，可覆盖升级，保留已有设置和会话 |
 
 > 无需安装 Node.js 或其他运行环境，程序已自带。
 
 ## 🚀 快速开始
 
-1. 下载 `Harness-Gemini-1.0.0-win-x64.exe` 并双击运行。
+1. 下载 `Harness-Gemini-1.3.10-win-x64.exe`，双击并按提示安装。
 2. 点击左下角「内置浏览器」右侧的 **设置** 按钮，新建一个模型连接：
    - 选择接口协议（Chat Completions / Anthropic Messages / Responses）
    - 填写 **API 地址**（通常以 `/v1` 结尾）和 **API Key**
@@ -99,9 +99,9 @@
 </details>
 
 <details>
-<summary><b>设置页里 API Key 是明文显示的？</b></summary>
+<summary><b>设置页里如何查看 API Key？</b></summary>
 
-是的，1.0.0 起设置页会直接显示已保存的 Key，方便查看和修改。磁盘上仍是加密保存，其他网页无法读取。**截图或录屏分享设置页时请注意遮挡。** 清空输入框再保存会删除该连接的 Key。
+已保存的 Key 默认以掩码显示，需要时可在设置中主动查看。磁盘上仍使用 Windows 系统密钥保护加密保存。截图或录屏分享设置页时请遮挡已展开的密钥；删除密钥请使用设置中的清除操作。
 </details>
 
 <details>
@@ -119,8 +119,8 @@
 <details>
 <summary><b>怎么升级到新版本？卸载要删什么？</b></summary>
 
-- **升级**：关闭旧版，运行新版 exe 即可，设置和对话会自动保留。
-- **卸载**：删除 exe；如需清除数据，再删除上面"数据与隐私"表格里的两个文件夹。
+- **升级**：退出正在运行的旧版，运行新版安装包并覆盖安装，设置和对话会保留。
+- **卸载**：通过 Windows 的“已安装的应用”卸载程序；如需清除数据，再删除上面"数据与隐私"表格里的两个文件夹。
 </details>
 
 <details>
@@ -132,6 +132,11 @@
 ## 📝 更新日志
 
 见 [Releases](https://github.com/gylidianh/harness-gemini/releases)。
+
+## 贡献者
+
+1. [@gylidianh](https://github.com/gylidianh)
+2. [@nexou9527](https://github.com/nexou9527)
 
 ## 🙏 致谢
 
