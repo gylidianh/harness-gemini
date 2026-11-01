@@ -9,3 +9,15 @@ backup/
 *.tmp
 Thumbs.db
 .DS_Store
+.local-data/
+.local-workspace/
+release/
+__pycache__/
+*.pyc
+*.pyo
+*.bak
+settings.json
+settings.json.bak
+sessions/
+deleted-sessions/
+artifacts/

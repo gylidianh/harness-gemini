@@ -1,0 +1,68 @@
+{
+  "name": "read_excel",
+  "description": "快速读取 Excel(.xlsx/.xlsm/.xls) 文件：自动兼容新版 openpyxl 与旧版 xlrd，自动处理含 NBSP/特殊空格/中文的 Windows 路径，把所有 Sheet 提取为 Markdown 表格或 JSON 行（并提供 nonEmptyCells 坐标映射）；输出公式原型、批注与特殊 number_format（暴露伪整数格式）；日期等特殊类型统一转成可读文本；未被 Excel 计算过的公式会标为“公式无缓存值”而不是把公式原文当结果；表头不在第一行（上方有标题行）时会自动定位真正的表头，再按“必须整数/最多N位小数”约束扫描并报警。需要读取、核对或检查 Excel 内容时优先使用，比自己写脚本快且不会踩编码坑。【强约束】本工具已返回完整精确数据，调用后严禁再使用 run_command 编写 Python 脚本重复读取文件或单独计算加减乘除。 输出受字节上限约束，truncated/nextRow/nextColumn/nextSheet 明确报告未返回的内容。",
+  "command": [
+    "read_excel.py"
+  ],
+  "readOnly": true,
+  "pathParameters": [
+    "path"
+  ],
+  "timeoutMs": 60000,
+  "parameters": {
+    "type": "object",
+    "properties": {
+      "path": {
+        "type": "string",
+        "description": "Excel 文件路径（支持 .xlsx/.xlsm/.xls 及含特殊空格的文件名）；只在指定目录查找，多个相似文件名时报错，不递归改读其它目录。"
+      },
+      "format": {
+        "type": "string",
+        "enum": [
+          "json",
+          "markdown"
+        ],
+        "description": "输出格式，默认 json"
+      },
+      "formulas": {
+        "type": "boolean",
+        "description": "是否提取公式原型，默认 true"
+      },
+      "comments": {
+        "type": "boolean",
+        "description": "是否提取单元格批注，默认 true"
+      },
+      "maxRows": {
+        "type": "integer",
+        "description": "每个 Sheet 最多读取行数，默认 500",
+        "minimum": 1,
+        "maximum": 10000
+      },
+      "startRow": {
+        "type": "integer",
+        "minimum": 1,
+        "description": "起始行，默认1；与 nextRow 配合续读。"
+      },
+      "startColumn": {
+        "type": "integer",
+        "minimum": 1,
+        "maximum": 16384,
+        "description": "起始列编号，默认1；与 nextColumn 配合续读。"
+      },
+      "maxColumns": {
+        "type": "integer",
+        "minimum": 1,
+        "maximum": 512,
+        "description": "本次最多返回的列数，默认512；格式化空列不计入实际范围。"
+      },
+      "sheet": {
+        "type": "string",
+        "description": "只读指定名称的工作表；配合 nextSheet 读取被字节上限截断的后续工作表。"
+      }
+    },
+    "required": [
+      "path"
+    ]
+  },
+  "version": "1.2.1"
+}

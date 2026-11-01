@@ -1,0 +1,85 @@
+{
+  "name": "read_pdf",
+  "description": "快速提取 PDF 的文字、页数和文档信息（本机 PyMuPDF，未安装时退回 pypdf），支持含 NBSP/特殊空格/中文的 Windows 路径，只在指定目录唯一匹配并报告实际路径。需要阅读、总结或检索 PDF 时优先使用。【扫描件】没有文字层的页自动渲染为整页图片，不分块；有文字层但含印章、签名、手写的页可指定 pages 并设 vision=\"force\"。结果的 documentId 是 PDF 内容 SHA256，images 中的 imageKey 稳定标识页面及渲染参数；同一内容和参数会复用本地图片缓存。每批默认最多 4 张（maxImages 可指定，最多 6），图片长边不超过 2000 像素、单图不超过 1.5 MiB，本批编码后总量不超过 6 MiB；超出按 nextPage 继续，未发送页不会计入已读。金额、数量、箱号等须逐字核对，看不清须说明，不要猜测。【记录并续读】看图后调用 record_pdf_pages，按 documentId 提交本批已读清各页的 page、text、fields；text 保存本任务需要的原文，fields 保存编号、金额、数量、重量、日期、签章等关键字段。尚未读清的页不要提交为已提取。continue=true 会在同一次记录调用中自动返回下一批图片，无需先另发选页请求。只有已提交记录的图片才可移除。断点续读设 resume=true，并填写原 pdfProgress.targetId 为 targetId；多个匹配任务时必须指定。需要回看原图时指定 pages 并设 review=true，宿主会强制视觉读取并建立独立复核目标，复用缓存图。扫描页未交付图片只能记 needsReview=true。【文字】按 pages 范围读取；截断按 nextPage 续读，单页过长时配合 nextCharOffset。search 只返回关键字片段，不搜索扫描图片；扫描页会列在 unsearchedScannedPages。info=true 只返回元数据。电子文字完整时不要 force。不得另用 run_command 编写脚本重复读取相同 PDF。",
+  "command": [
+    "read_pdf.py"
+  ],
+  "readOnly": true,
+  "pathParameters": [
+    "path"
+  ],
+  "timeoutMs": 120000,
+  "parameters": {
+    "type": "object",
+    "properties": {
+      "path": {
+        "type": "string",
+        "description": "PDF 文件路径，相对当前工作目录或绝对路径（支持含 NBSP/特殊空格的文件名，可直接用普通空格书写或只传文件名）；只在指定目录查找，多个相似文件名时报错，不递归改读其它目录。"
+      },
+      "pages": {
+        "type": "string",
+        "description": "要读取的页码，例如 \"1-5\"、\"3,7,10-12\"；省略时从第 1 页开始"
+      },
+      "search": {
+        "type": "string",
+        "description": "只返回包含这个关键字的页面片段（不区分大小写）"
+      },
+      "maxChars": {
+        "type": "integer",
+        "minimum": 1000,
+        "maximum": 200000,
+        "description": "返回文字的字符上限，默认 60000"
+      },
+      "info": {
+        "type": "boolean",
+        "description": "为 true 时只返回页数、标题、作者等信息，不读正文"
+      },
+      "charOffset": {
+        "type": "integer",
+        "minimum": 0,
+        "description": "从本页第几个字符继续读（配合返回的 nextCharOffset 使用，读超长单页的后半部分）；search模式下该偏移指向搜索片段正文，需保留相同search参数。"
+      },
+      "vision": {
+        "type": "string",
+        "enum": [
+          "auto",
+          "force",
+          "off"
+        ],
+        "description": "扫描页处理：auto=没有文字层的页自动转图片交给视觉模型（默认）；force=所选页一律转图片（看印章、签名、手写或文字层乱码时用）；off=只取文字"
+      },
+      "dpi": {
+        "type": "integer",
+        "minimum": 72,
+        "maximum": 300,
+        "description": "渲染分辨率，默认 200；小字看不清时用 300（整页一张图，长边自动限制在 2000 像素内，保存为 JPEG）"
+      },
+      "maxImages": {
+        "type": "integer",
+        "minimum": 1,
+        "maximum": 6,
+        "description": "本次最多交给视觉模型的图片张数，默认 4、最多 6；编码后总量另受 6 MiB 限制，超出按 nextPage 续读。"
+      },
+      "resume": {
+        "type": "boolean",
+        "default": false,
+        "description": "断点续读：与 targetId 一起恢复原任务记录并补读未确认页；同一 PDF 匹配多个任务时必须指定 targetId，不能默认选最新任务。"
+      },
+      "review": {
+        "type": "boolean",
+        "default": false,
+        "description": "指定 pages 查看原图；宿主强制 vision=force 并使用独立复核目标，复用缓存图片，原读取记录和范围保持独立。"
+      },
+      "targetId": {
+        "type": "string",
+        "maxLength": 128,
+        "description": "恢复目标：resume=true 时填写原读取返回的 pdfProgress.targetId，恢复其原页范围、偏移和记录；同一 PDF 有多个匹配目标时必须提供。"
+      }
+    },
+    "required": [
+      "path"
+    ],
+    "additionalProperties": false
+  },
+  "version": "1.2.5"
+}

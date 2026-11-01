@@ -5,7 +5,7 @@ Windows 桌面 AI 工作台，在一个窗口中聊天、编程、生图和浏�
 [![版本](https://img.shields.io/github/v/release/gylidianh/harness-gemini)](https://github.com/gylidianh/harness-gemini/releases/latest)
 ![Windows x64](https://img.shields.io/badge/Windows-10%20%2F%2011%20x64-0078d4)
 
-**[下载 1.3.10 安装包](https://github.com/gylidianh/harness-gemini/releases/download/v1.3.10/Harness-Gemini-1.3.10-win-x64.exe)** · [版本说明](CHANGELOG.md) · [使用指南](docs/usage.md) · [常见问题](docs/faq.md)
+**[下载 1.3.10 安装包](https://github.com/gylidianh/harness-gemini/releases/download/v1.3.10/Harness-Gemini-1.3.10-win-x64.exe)** · **[浏览源码](app/)** · [版本说明](CHANGELOG.md) · [使用指南](docs/usage.md) · [开发说明](docs/development.md) · [常见问题](docs/faq.md)
 
 ![Harness Gemini 1.3.10 主界面](docs/images/home-1.3.10.png)
 
@@ -62,14 +62,21 @@ Windows 桌面 AI 工作台，在一个窗口中聊天、编程、生图和浏�
 
 ## 下载、文档与反馈
 
-本仓库维护 Windows 安装包的发布入口和使用文档。
+本仓库维护 Windows 安装包、可用源码和使用文档。
 
 - [当前版本与全部下载](https://github.com/gylidianh/harness-gemini/releases/latest)
 - [更新记录](CHANGELOG.md)
 - [使用指南](docs/usage.md)
+- [源码范围、运行与打包](docs/development.md)
 - [常见问题](docs/faq.md)
 - [报告问题](https://github.com/gylidianh/harness-gemini/issues/new/choose)
 - [参与维护](CONTRIBUTING.md)
+
+## 源码范围
+
+[app/](app/) 包含与已发布 1.3.10 对应的 [桌面端](app/desktop/)、[服务端](app/server/)、[共享模块](app/shared/) 和 [新增 UI 模块与前端产物](app/dist/)，可在 GitHub 上直接点开查看。`SOURCE-MANIFEST.json` 记录这些文件在发布包中的校验值。
+
+基础界面的原始 React 工程目前不在仓库中，不能从这里重新构建该前端 bundle；现有前端产物可直接运行并随桌面程序打包。详见 [开发说明](docs/development.md)。
 
 ## 贡献者
 
@@ -78,4 +85,4 @@ Windows 桌面 AI 工作台，在一个窗口中聊天、编程、生图和浏�
 
 ## 致谢
 
-项目使用 Electron、React、Express、KaTeX、react-markdown、lucide 和 undici 等组件。内置浏览器界面、上下文统计及附件功能部分改编自 [ZCode](https://github.com/zai-org/ZCode)。部分供应商图标来自 [LobeHub Icons](https://github.com/lobehub/lobe-icons) 和供应商站点。完整第三方许可与来源说明随程序附带，见 `THIRD-PARTY-NOTICES.md`、`third-party/` 和图标目录中的许可文件。
+项目使用 Electron、React、Express、KaTeX、react-markdown、lucide 和 undici 等组件。内置浏览器界面、上下文统计及附件功能部分改编自 [ZCode](https://github.com/zai-org/ZCode)。部分供应商图标来自 [LobeHub Icons](https://github.com/lobehub/lobe-icons) 和供应商站点。完整第三方许可与来源说明随程序附带，见 [第三方声明](app/THIRD-PARTY-NOTICES.md)、[第三方许可](app/third-party/) 和图标目录中的许可文件。

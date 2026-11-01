@@ -1,0 +1,79 @@
+{
+  "release": "1.3.5",
+  "hashes": {
+    "read_pdf/read_pdf.py": [
+      "5d055614c04343149bce6f54cb85d6603c5b711d1a95ac2db1287cb942168410",
+      "92163321396900509fc603d00b2bdfd879eaea62f7a0e742f4692551014e198a",
+      "3de4e992b2bc3ee718c5725c0e0289963362246cfcb972126887e692aa108946",
+      "5382c52820f1fce8eb1b24aac7d24eb5cb98bfd194f32d2852885e40d8a2a4d6",
+      "276dc169bc6643b73ad2acd0729cfbfb729d3c044aa173eae6832450d96920f2",
+      "1f8cccb27930a63492e99ce9e13e597bd4e3291e089558795c3a6b932acee646",
+      "b8b21dae972bd4fafb53561005fd86a488daa2cd874a2f34fa6b2492c744c363",
+      "2b832038570784f878a655cb7a0e6db3e16444d7e89c8d68ccf9bf6a5e41e5bb"
+    ],
+    "read_pdf/skill.json": [
+      "78a9d341062fd192d20cf201fde6dc7036c38a58542224ed2c1f6a825225c0bc",
+      "16a14c1fa7e5f6695bda8a2a32955f26787de2a9dee1193fb3b39ae2b1d3384a",
+      "87030d4f9c5ef3444d152a69c665ea0c6800628e0312620ba09e7c411adc7f3e",
+      "3eb8c14c923f75163426621d6d4963bfdc502bd73ddc2c44c7193e6cab17f2cd",
+      "205dc1db2880aa5929b941797ad7acccd5799bbe603fe4f17889a3f4c9fd6aa3",
+      "26fab80a51ad4b57e4cb87507201c172edf01deaac21901eaeb728d3ee8b9743",
+      "6ab75a4a201473c25ee587a6310a74a6110177c83702330a92420ec9291e1833"
+    ],
+    "pdf_inspect/pdf_inspect.py": [
+      "3a46e9e61ff6216eed7d6a4230360aecea33efca82acd329ec3d2be5233f6617",
+      "3069ab54de2ac46d4dc7e021ccab1ce7a6b182b93a9b79cd8694394be47b3880"
+    ],
+    "pdf_inspect/skill.json": [
+      "8c3b5990a0a924ff4e6210cdefac2daaa917c871de7de2c3d4ed0891c94cafe5",
+      "2a728718079bb4de4c79e7bb59cd33965275225f4c8bdf6a70e127517c06e96f"
+    ],
+    "read_excel/read_excel.py": [
+      "8f6e402c7f84472b2b02af9b8cca89117c4ffc43bb682b073fc17c354e842e73",
+      "4ee0e8513134a47320a60b93095e3673ab68f7bc5d48e0fbfa6ae38adaffdd64"
+    ],
+    "read_excel/skill.json": [
+      "69fc23abe78af39e7d4403b10405e744068de11a1f851062db66cc267bd49e35",
+      "4c452dc0c6f742c068e53b5f16cd953f87c46ed7a4e60599c9646762958bda3b"
+    ],
+    "customs_validator/customs_validator.py": [
+      "f532c077d7bc175ce40f7a76771325acb17cfe0a5a5a2d52665bf2dba252d1f6",
+      "18927331de319cfc318ac87589a2f6f25f9cf4facc2c546b9430f7a8cad6ab59"
+    ],
+    "customs_validator/skill.json": [
+      "bb85384eba5fa10fb48d43da7292b3690d396551d287fb7374ec33a71eb861a0",
+      "f90f682da038bea93e4a5848e2202b3b7e5655f1309f5e9751c8b1620c315595",
+      "065c9a30e7ff70c359d5d8d15b64beed917ae509b91044246cca571172341667"
+    ],
+    "read_doc/read_doc.py": [
+      "069e5464dc65fba896a4e7680be0d618e83bd98e9a4e9d07007598c4f59f8ec6",
+      "ce375b4793583a2c0198159d46a2bdf0480f8671a4a1f4fe91f43f574c221bd2",
+      "caa6743fefa16337bfc8739a75b61c986cdc67bb54a6657ce9748e82676aa8ec",
+      "da3bb443184e3915df081b50bd8346c7f2fc8d23b81344666d3d71f90947c105"
+    ],
+    "read_doc/skill.json": [
+      "bac59c73f6c6f122eb1083bd69048ab2e90f8d35d3022ce0585f9df93674b3ab",
+      "5452234b8850227e15a4d48709a953c55565db317c6df3aaf5afd9a6214ba7de",
+      "f863fc32b7e492ab6566980ec57f07d943a25bcc9ca8013ad4c8304c85e8065b"
+    ],
+    "read_doc/word_worker.ps1": [
+      "95f1100482d47da415071f2c5b2e2f73036b7af53f5c6dbce9d0c43d9bb6ba51"
+    ],
+    "README.md": [
+      "b53997b7505d80e4d0fe589a1a90872afbb68a07150750065fee052892357674",
+      "af4a4d5bdaecef4d1178b49a15894909d261af3c011553853f49979829c979ef",
+      "37a02d195b0b4ee4b94945efb8604c0785ccc69ca7ba07b16cefe2dd5d0fec55"
+    ]
+  },
+  "introducedSkills": [
+    {
+      "name": "read_doc",
+      "revision": "1.2.1-read_doc-1",
+      "files": [
+        "skill.json",
+        "read_doc.py",
+        "word_worker.ps1"
+      ]
+    }
+  ]
+}

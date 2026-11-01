@@ -1,0 +1,89 @@
+{
+  "name": "customs_validator",
+  "description": "通关与单证规则校验工具箱：集装箱号 ISO 6346 校验、报关单字段长度校验（合同号/提单号 32 字符上限等）、件重尺与单价×数量对账（区分计价数量 qty 与包装件数 packages/crates，支持单件毛重/净重×件数=总毛重/总净重）、面积全链条校验（长×宽×每箱片数×箱数=总面积），并交叉核对按面积计价的数量与实际发货面积是否相符、Excel 混装清单各行重量/件数/价格合计与发票装箱单交叉核对并自动反推单价。字段名支持常见别名（quantity/unit_price/amount 等），认不出的字段会明确列在 warnings 里；缺数据没做的检查会列在 checksSkipped 里，不会伪装成“全部通过”。贸易术语可带地点（CIF Shanghai），保险要求按 Incoterms 2020（仅 CIF/CIP 要求卖方投保）；价格整数要求需显式开启 requireIntegerPrices。所有算术（乘法、加法、除法、偏差、反推）均由本工具一次性算完，输出通过项/错误项/警告项的结构化体检报告。【强约束】本工具已返回完整精确数据，调用后严禁再使用 run_command 编写 Python 脚本重复读取文件或单独计算加减乘除。",
+  "command": [
+    "customs_validator.py"
+  ],
+  "readOnly": true,
+  "pathParameters": [],
+  "timeoutMs": 30000,
+  "parameters": {
+    "type": "object",
+    "properties": {
+      "containers": {
+        "type": "array",
+        "items": {
+          "type": "string"
+        },
+        "description": "集装箱号列表，如 [\"VSTU2433551\", \"VSTU2433567\"]；只有一个箱号时也传列表，例如 [\"VSTU2433551\"]。"
+      },
+      "contractNo": {
+        "type": "string",
+        "description": "合同协议号（校验是否超 32 字符）"
+      },
+      "invoiceNo": {
+        "type": "string",
+        "description": "发票号"
+      },
+      "blNo": {
+        "type": "string",
+        "description": "提运单号"
+      },
+      "incoterm": {
+        "type": "string",
+        "description": "贸易术语，如 DAP、CIF、FOB"
+      },
+      "freight": {
+        "type": "number",
+        "description": "运费金额"
+      },
+      "insurance": {
+        "type": "number",
+        "description": "保费金额"
+      },
+      "goodsValue": {
+        "type": "number",
+        "description": "货品总价"
+      },
+      "invoiceTotal": {
+        "type": "number",
+        "description": "发票总价（用于与 Excel 清单价格合计交叉核对）"
+      },
+      "totalPackages": {
+        "type": "number",
+        "description": "装箱单总箱数（用于与 Excel 清单件数合计核对）"
+      },
+      "totalGrossWeightKg": {
+        "type": "number",
+        "description": "装箱单总毛重 kg（用于与 Excel 清单重量合计核对）"
+      },
+      "totalVolumeM3": {
+        "type": "number",
+        "description": "总体积 m³（用于与 Excel 清单体积合计核对）"
+      },
+      "totalArea": {
+        "type": "number",
+        "description": "发票/装箱单总面积 M²（用于反推单价）"
+      },
+      "lineItems": {
+        "type": "array",
+        "items": {
+          "type": "object"
+        },
+        "description": "明细行：qty=计价数量(如面积M2或PCS)；packages/crates=包装件数(箱数)；unitPrice/totalPrice=单价与总价(金额按 qty 计算)；unitWeightKg/totalWeightKg=单箱毛重与总毛重(按 packages 计算)；unitNetWeightKg/totalNetWeightKg=单箱净重与总净重；lengthMm/widthMm/pcsPerPackage/crateAreaM2/totalArea=尺寸与面积全链条；pieceArea/pieces=兼容旧写法；qtyUnit/unit=PCS 表示按件计价，不把件数当作面积核对。"
+      },
+      "excelRows": {
+        "type": "array",
+        "items": {
+          "type": "object"
+        },
+        "description": "Excel 混装清单各行 {container, pieces, weightKg, volumeM3, price}，自动合计并与发票/装箱单交叉核对、校验价格是否整数、反推单价；支持 packages、weight、amount、volume 等别名；缺失或无效的列会明确列入跳过项。"
+      },
+      "requireIntegerPrices": {
+        "type": "boolean",
+        "description": "把“订舱清单价格必须整数”作为警告级检查开启，默认关闭"
+      }
+    }
+  },
+  "version": "1.2.9"
+}

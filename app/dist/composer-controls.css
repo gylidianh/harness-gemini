@@ -1,0 +1,112 @@
+.app-shell .composer-toolbar {
+  display: grid;
+  grid-template-columns: 30px auto auto minmax(0, 1fr) 38px;
+  grid-template-rows: auto;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 12px 12px;
+}
+.app-shell .composer-toolbar > * { order: initial; grid-area: auto; min-width: 0; }
+.app-shell .composer-toolbar button { white-space: nowrap; }
+.app-shell .composer-toolbar .composer-attach { grid-area: 1 / 1; }
+.app-shell .composer-toolbar .mode-switcher { grid-area: 1 / 2; justify-self: start; }
+.app-shell .composer-toolbar .permission-control { grid-area: 1 / 3; justify-self: start; }
+.app-shell .composer-toolbar .composer-model-controls { grid-area: 1 / 4; justify-self: end; }
+.app-shell .composer-toolbar .composer-actions { grid-area: 1 / 5; margin: 0; justify-self: end; }
+.app-shell .composer-toolbar .mode-switcher > button { padding: 6px 8px; gap: 5px; font-size: 12px; }
+.app-shell .composer-toolbar .permission-trigger { padding: 6px 8px; font-size: 12px; }
+.app-shell .composer-toolbar .send-button, .app-shell .composer-toolbar .stop-button { width: 38px; height: 38px; }
+.composer-model-controls {
+  display: flex;
+  flex-wrap: nowrap;
+  align-items: center;
+  gap: 2px;
+  min-width: 0;
+  max-width: 100%;
+}
+.composer-model-controls .header-model-control {
+  flex: 0 1 auto;
+  min-width: 0;
+  max-width: 196px;
+  overflow: hidden;
+}
+.composer-model-controls .reasoning-control { flex-shrink: 0; }
+.reasoning-label-compact { display: none; }
+.app-shell[data-skin] .composer-toolbar .model-selector-trigger {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  width: auto;
+  min-width: 0;
+  max-width: min(196px, 100%);
+  min-height: 30px;
+  padding: 5px 8px;
+  border: 1px solid transparent;
+  border-radius: var(--radius-full);
+  background: transparent;
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.5;
+}
+.app-shell[data-skin] .composer-toolbar .model-selector-trigger:hover,
+.app-shell[data-skin] .composer-toolbar .model-selector-trigger[aria-expanded="true"] {
+  background: var(--hover);
+  color: var(--text);
+}
+.app-shell[data-skin] .composer-toolbar .reasoning-trigger {
+  min-height: 30px;
+  padding: 5px 8px;
+  gap: 4px;
+  font-size: 12px;
+  line-height: 1.5;
+}
+.app-shell[data-skin] .reasoning-menu {
+  box-sizing: border-box;
+  width: min(248px, calc(100vw - 32px));
+  padding: 5px;
+  background: var(--surface);
+  border-radius: 14px;
+}
+.app-shell[data-skin] .reasoning-menu-caption { padding: 7px 9px; font-size: 11px; }
+.app-shell[data-skin] .reasoning-option { padding: 8px 9px; gap: 6px; border-radius: 9px; }
+.app-shell[data-skin] .reasoning-option small { font-size: 11px; line-height: 1.5; }
+.app-shell[data-skin] .reasoning-option:disabled { opacity: .45; cursor: not-allowed; }
+.app-shell[data-skin] .reasoning-option:disabled:hover { background: transparent; }
+.composer-mode-menu {
+  position: fixed;
+  z-index: 120;
+  overflow-y: auto;
+  padding: 5px;
+  border: 1px solid var(--line-strong);
+  border-radius: 12px;
+  background: var(--surface);
+  color: var(--text);
+  box-shadow: 0 8px 28px #00000024;
+  box-sizing: border-box;
+}
+.composer-mode-menu button { display: flex; align-items: center; gap: 9px; width: 100%; padding: 10px; border: 0; border-radius: 8px; background: transparent; color: inherit; font: inherit; font-size: 13px; text-align: left; cursor: pointer; }
+.composer-mode-menu button:hover { background: var(--hover); }
+.composer-mode-menu button[aria-checked="true"] { color: var(--accent); background: var(--accent-tonal); }
+.composer-mode-menu button:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+.composer-mode-check { margin-left: auto; }
+@container composer (width <= 640px) {
+  .app-shell .composer-toolbar { gap: 4px; padding: 4px 8px 10px; }
+  .app-shell .composer-toolbar .permission-trigger { width: 30px; height: 30px; padding: 0; justify-content: center; }
+  .app-shell .composer-toolbar .permission-trigger > span,
+  .app-shell .composer-toolbar .permission-trigger > svg:last-child { display: none; }
+  .app-shell .composer-toolbar .reasoning-label-full { display: none; }
+  .app-shell .composer-toolbar .reasoning-label-compact { display: inline; }
+}
+@container composer (width <= 430px) {
+  .app-shell .composer-toolbar { grid-template-columns: 28px auto 28px minmax(0, 1fr) 34px; gap: 3px; padding: 4px 6px 8px; }
+  .app-shell .composer-toolbar .composer-attach { width: 28px; height: 28px; }
+  .app-shell .composer-toolbar .permission-trigger { width: 28px; height: 28px; }
+  .app-shell .composer-toolbar .mode-switcher > button { gap: 3px; padding: 5px; white-space: nowrap; }
+  .app-shell .composer-toolbar .mode-switcher > button > svg:last-child { display: none; }
+  .app-shell[data-skin] .composer-toolbar .model-selector-trigger,
+  .app-shell[data-skin] .composer-toolbar .reasoning-trigger { padding: 5px; gap: 3px; }
+  .app-shell[data-skin] .composer-toolbar .model-selector-trigger > svg:last-child,
+  .app-shell[data-skin] .composer-toolbar .reasoning-trigger > svg:last-child { display: none; }
+  .app-shell .composer-toolbar .send-button,
+  .app-shell .composer-toolbar .stop-button { width: 34px; height: 34px; }
+}

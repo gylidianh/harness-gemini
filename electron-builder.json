@@ -1,0 +1,31 @@
+{
+  "appId": "app.localharness.desktop",
+  "productName": "Harness Gemini",
+  "copyright": "Harness Gemini",
+  "electronVersion": "44.7.2",
+  "directories": { "app": "app", "output": "release" },
+  "asar": true,
+  "files": [
+    "desktop/**/*", "server/**/*", "shared/**/*", "dist/**/*",
+    "third-party/**/*", "build/icon.ico", "THIRD-PARTY-NOTICES.md", "package.json",
+    "!**/__pycache__/**", "!**/*.pyc", "!**/*.bak"
+  ],
+  "extraResources": [{ "from": "app/build/icon.ico", "to": "icon.ico" }],
+  "afterPack": "tools/after-pack.cjs",
+  "win": {
+    "target": [{ "target": "nsis", "arch": ["x64"] }],
+    "icon": "app/build/icon.ico",
+    "signAndEditExecutable": false
+  },
+  "nsis": {
+    "guid": "12aa36ea-a894-55b8-9a98-ecd897b21d83",
+    "oneClick": false,
+    "perMachine": false,
+    "allowToChangeInstallationDirectory": true,
+    "installerIcon": "app/build/icon.ico",
+    "uninstallerIcon": "app/build/icon.ico",
+    "shortcutName": "Harness Gemini",
+    "uninstallDisplayName": "Harness Gemini ${version}",
+    "artifactName": "Harness-Gemini-${version}-win-x64.${ext}"
+  }
+}

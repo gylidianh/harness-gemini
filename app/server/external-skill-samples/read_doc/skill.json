@@ -1,0 +1,97 @@
+{
+  "name": "read_doc",
+  "description": "稳健读取/批量转换旧版 Word 97-2003 二进制 .doc（也支持 .dot/.rtf/.wps，可选 .docx）：每个文件用独立的 WINWORD 进程（通过 PowerShell -File + JSON 作业文件调用 Word COM，不依赖 pywin32/win32com，不拼接命令字符串，不会出现 $word 提前展开或 \"$f:\" 驱动器语法错误）另存为 .docx，单文件超时自动结束该进程，崩溃（0x800706BA RPC 不可用 / 0x800A01A8 / Null 对象）自动以 OpenAndRepair 重试且不影响其它文件；Word 不可用时自动退回内置纯 Python OLE/Word97 解析器提取正文文字。随后用 python-docx 按正文顺序提取段落、表格（Markdown + 二维数组）、页眉页脚和文本框，并在输出目录（默认 工作目录/doc_converted）保存 .docx/.txt/.tables.json，可选同时导出 PDF 供 ext_pdf_inspect 检测印章与版面。兼容含 NBSP/特殊空格/中文的路径。遇到 .doc 文件需要阅读、核对或转换时优先使用本工具，不要自己写 win32com/PowerShell COM 循环脚本。返回 summary（成功数、失败原因诊断、使用的方法）与每个文件的内容；超出输出预算的正文会截断并给出 textFile 完整路径；达到时间预算或接近宿主时限时会停止并给出 notProcessed，把它作为 files 再调用即可继续。 适配宿主UTF-8字节上限；reportTruncated=true时，按fullResultFile读取完整报告，原始全文仍保存在textFile。",
+  "command": [
+    "read_doc.py"
+  ],
+  "readOnly": false,
+  "pathParameters": [
+    "path",
+    "outputDir"
+  ],
+  "timeoutMs": 600000,
+  "parameters": {
+    "type": "object",
+    "properties": {
+      "path": {
+        "type": "string",
+        "description": "单个 .doc 文件或包含 .doc 的文件夹路径（相对工作目录或绝对路径，支持特殊空格）"
+      },
+      "files": {
+        "type": "array",
+        "items": {
+          "type": "string"
+        },
+        "description": "多个文件路径（可与 path 同时使用）"
+      },
+      "recursive": {
+        "type": "boolean",
+        "description": "path 为文件夹时是否递归子文件夹，默认 false"
+      },
+      "includeDocx": {
+        "type": "boolean",
+        "description": "扫描文件夹时是否也读取 .docx/.docm，默认 false（只处理旧格式）"
+      },
+      "outputDir": {
+        "type": "string",
+        "description": "转换结果输出目录，默认 工作目录/doc_converted"
+      },
+      "exportPdf": {
+        "type": "boolean",
+        "description": "同时导出 PDF（用于 ext_pdf_inspect 查红章/签名/版面），默认 false"
+      },
+      "extract": {
+        "type": "boolean",
+        "description": "是否提取并返回文字内容，默认 true；false 时只转换"
+      },
+      "includeTables": {
+        "type": "boolean",
+        "description": "是否返回表格二维数组，默认 true（表格同时以 Markdown 形式嵌在 text 中）"
+      },
+      "maxCharsPerFile": {
+        "type": "integer",
+        "minimum": 500,
+        "maximum": 200000,
+        "description": "每个文件在返回结果中的正文字符上限，默认 15000；完整内容总在 textFile 中"
+      },
+      "mode": {
+        "type": "string",
+        "enum": [
+          "auto",
+          "word",
+          "builtin"
+        ],
+        "description": "auto=Word 转换失败时退回内置解析（默认）；word=只用 Word；builtin=不启动 Word，只用内置纯文字解析"
+      },
+      "overwrite": {
+        "type": "boolean",
+        "description": "已存在且较新的 .docx 是否强制重新转换，默认 false（复用）"
+      },
+      "retries": {
+        "type": "integer",
+        "minimum": 0,
+        "maximum": 4,
+        "description": "Word 失败后的重试次数（重试时启用 OpenAndRepair），默认 2"
+      },
+      "timeoutPerFileSec": {
+        "type": "integer",
+        "minimum": 15,
+        "maximum": 300,
+        "description": "单个文件 Word 处理超时秒数，超时强制结束该 WINWORD 进程，默认 90"
+      },
+      "delayBetweenFilesSec": {
+        "type": "number",
+        "minimum": 0,
+        "maximum": 10,
+        "description": "两个文件之间的等待秒数，默认 1"
+      },
+      "totalTimeBudgetSec": {
+        "type": "integer",
+        "minimum": 30,
+        "maximum": 580,
+        "description": "本次调用总时间预算，默认 540；超过后不再开始新文件，剩余文件列入 notProcessed。正在处理的文件（含 Word 重试与超时清理）始终在宿主时限前结束，放不下的文件同样列入 notProcessed"
+      }
+    }
+  },
+  "version": "1.0.2"
+}

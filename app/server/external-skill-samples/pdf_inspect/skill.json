@@ -1,0 +1,44 @@
+{
+  "name": "pdf_inspect",
+  "description": "PDF 版面结构与图章检测器：自动兼容含 NBSP(U+00A0)/特殊空格/多减空格/中文的 Windows 路径（可直接传普通空格路径；只在指定目录唯一匹配，并报告实际路径）；按坐标输出每页文字行（保留 x 坐标范围，可区分左右分栏签名）、把线框表格还原为二维表格、列出内嵌图片并检测红色印章（红色像素数量、红色区域形状与密度，CMYK 图片会先转成 RGB）及其邻近文字，并在 sealSummary 里汇总疑似印章的页与位置。审查合同/发票/报关单的排版、签名盖章情况、表格是否串行时优先使用，比纯文本提取更能还原版面。注意：若用户要求不检查格式和排版，除非确需检测红章，否则不要调用本工具。【强约束】本工具已返回完整精确数据，调用后严禁再使用 run_command 编写 Python 脚本重复读取文件或单独计算加减乘除。 达到页数/字节上限时返回 nextPage 和 nextPageOffset，带 pages 和 pageOffset 续读。",
+  "command": [
+    "pdf_inspect.py"
+  ],
+  "readOnly": true,
+  "pathParameters": [
+    "path"
+  ],
+  "timeoutMs": 120000,
+  "parameters": {
+    "type": "object",
+    "properties": {
+      "path": {
+        "type": "string",
+        "description": "PDF 文件路径（支持含 NBSP/特殊空格的文件名，可直接用普通空格书写或只传文件名）；只在指定目录查找，多个相似文件名时报错，不递归改读其它目录。"
+      },
+      "pages": {
+        "type": "string",
+        "description": "页码范围，如 \"1-3\"、\"3,7\"；省略则读取全部页"
+      },
+      "pageOffset": {
+        "type": "integer",
+        "minimum": 0,
+        "description": "配合返回的 nextPageOffset 续读同一页的后续版面记录。"
+      },
+      "maxPages": {
+        "type": "integer",
+        "minimum": 1,
+        "maximum": 100,
+        "description": "本次最多返回的页数，默认10；另有输出字节上限。"
+      },
+      "includeWordPositions": {
+        "type": "boolean",
+        "description": "额外返回文字片段x坐标，默认false，以避免重复正文导致输出过大。"
+      }
+    },
+    "required": [
+      "path"
+    ]
+  },
+  "version": "1.2.1"
+}
