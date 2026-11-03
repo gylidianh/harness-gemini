@@ -7,7 +7,7 @@ Windows 桌面 AI 工作台，在一个窗口中聊天、编程、生图和浏�
 
 **[下载 1.4.4 安装包](https://github.com/gylidianh/harness-gemini/releases/download/v1.4.4/Harness-Gemini-1.4.4-win-x64.exe)** · **[浏览源码](app/)** · [版本说明](CHANGELOG.md) · [使用指南](docs/usage.md) · [开发说明](docs/development.md) · [常见问题](docs/faq.md)
 
-![Harness Gemini 1.3.10 主界面](docs/images/home-1.3.10.png)
+![Harness Gemini 1.4.4 主界面](docs/images/home-1.4.4.png)
 
 ## 功能
 
@@ -38,18 +38,25 @@ Windows 桌面 AI 工作台，在一个窗口中聊天、编程、生图和浏�
 <details>
 <summary>查看输入工具栏</summary>
 
-![输入工具栏](docs/images/composer-1.3.10.png)
+![输入工具栏](docs/images/composer-1.4.4.png)
 
 </details>
 
 <details>
 <summary>查看设置与技能管理</summary>
 
-![设置与技能管理](docs/images/settings-1.3.10.png)
+![设置与技能管理](docs/images/settings-1.4.4.png)
 
 </details>
 
-以上截图拍摄于 1.3.10，来自独立演示环境，连接和模型名称为示例，不包含真实密钥、聊天记录或用户文件。
+<details>
+<summary>查看内置浏览器下载进度</summary>
+
+![内置浏览器下载进度](docs/images/download-1.4.4.png)
+
+</details>
+
+以上截图拍摄于 1.4.4，来自独立演示环境，连接和模型名称为示例，不包含真实密钥、聊天记录或用户文件。
 
 ## 数据与权限
 
