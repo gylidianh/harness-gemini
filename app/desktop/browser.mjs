@@ -5,7 +5,10 @@
 // Apache-2.0: see third-party/ZCode-LICENSE.txt and ZCode-NOTICE.md.
 import { defaultPresentation, normalizePresentation, readPresentation, savePresentation, validLogicalViewport } from './browser-presentation.mjs';
 import { installContextMenu } from './context-menu.mjs';
+import { createDebuggerSession } from './debugger-session.mjs';
 import { randomUUID } from 'node:crypto';
+import fs from 'node:fs';
+import path from 'node:path';
 import { browserUrlAllowed, isPrivateWebUrl, normalizeBrowserInput, isLocalFileUrl } from '../shared/browser-navigation.mjs';
 import { createBrowserNetworkPolicy, createLocalRoot, createOfflineProxy, localFileInRoot } from './browser-network-policy.mjs';
 import { MAX_SNAPSHOT_ELEMENTS, REF_PATTERN, SNAPSHOT_PAGE_SCRIPT, createBrowserInput, normalizeRequest } from '../shared/browser-input.mjs';
@@ -13,6 +16,11 @@ export { browserUrlAllowed, normalizeBrowserInput } from '../shared/browser-navi
 
 export const BROWSER_COMMAND_CHANNEL = 'harness:browser-command';
 export const BROWSER_STATE_CHANNEL = 'harness:browser-state';
+export const BROWSER_DOWNLOADS_CHANNEL = 'harness:browser-downloads';
+export const BROWSER_DOWNLOAD_COMMAND_CHANNEL = 'harness:browser-download-command';
+/** 1.4.4: downloads now run side by side; the old one-at-a-time gate could block every
+ *  later click forever once a single item stayed pending. */
+export const MAX_ACTIVE_DOWNLOADS = 6;
 export const BROWSER_PARTITION = 'persist:harness-browser';
 /**
  * fix3: local pages run in their own in-memory session whose only proxy refuses everything. A page
@@ -112,7 +120,7 @@ function downloadName(value) {
 }
 
 /** Electron dependencies are injected so boundary tests cannot create windows. */
-export function createEmbeddedBrowser({ window, appOrigin, WebContentsView, View, session, ipcMain, presentationPath, openExternalUrl, Menu, BrowserWindow, nativeImage, onBeforeInput = null, confirmPrivateNavigation = null }) {
+export function createEmbeddedBrowser({ window, appOrigin, WebContentsView, View, session, ipcMain, presentationPath, openExternalUrl, Menu, BrowserWindow, nativeImage, onBeforeInput = null, confirmPrivateNavigation = null, downloadsDirectory = '', revealDownloadPath = null }) {
   let state = { openRequested: 0, desktopZoomFactor: 1, presentation: readPresentation(presentationPath) };
   let guestSession;
   let sessionReady = null;
@@ -138,6 +146,8 @@ export function createEmbeddedBrowser({ window, appOrigin, WebContentsView, View
   const closedTabs = [];
   const captureGuests = new Set();
   const downloads = new Map();
+  let downloadSequence = 0;
+  let downloadTimer = null;
   const listeners = [];
   const main = window.webContents;
   const ownUrl = value => { try { return new URL(value).origin === appOrigin; } catch { return false; } };
@@ -236,7 +246,7 @@ export function createEmbeddedBrowser({ window, appOrigin, WebContentsView, View
       }
       tab.emulationKey = key;
     }
-    if (visible) { tab.clipView?.setVisible(true); tab.view.setVisible(true); }
+    if (visible) { tab.clipView?.setVisible(true); tab.view.setVisible(true); hiddenReason = ''; notifyVisibility(); }
   }
 
   // A page wider than a narrow panel (fixed-width sites) is scaled down so its whole
@@ -303,7 +313,51 @@ export function createEmbeddedBrowser({ window, appOrigin, WebContentsView, View
     return emitState();
   }
 
-  function hideForRendererChange() {
+  /** 1.4.1-browserfix: why the page is not on screen, so a refused action can say so. */
+  let hiddenReason = '';
+  const visibilityWaiters = new Set();
+  function notifyVisibility() {
+    if (!inputArea) return;
+    for (const resolve of visibilityWaiters) resolve(true);
+    visibilityWaiters.clear();
+  }
+  function describeHidden() {
+    if (inputArea) return '';
+    try {
+      if (window.isMinimized()) return '应用窗口已最小化';
+      if (!window.isVisible()) return '应用窗口被隐藏';
+    } catch { return '应用窗口不可用'; }
+    const tab = activeTab();
+    if (!tab?.page.url) return '浏览器当前没有打开的网页';
+    if (tab.page.error) return '页面加载出错';
+    if (hiddenReason) return hiddenReason;
+    if (!lastRequested) return '浏览器面板还没有显示过';
+    if (!lastRequested.visible) return '浏览器面板已被收起，或右侧切换到了其他面板';
+    return '浏览器面板正在重新布局';
+  }
+  /** Wait until the native view is really laid out on screen, then one more frame. */
+  function waitVisible(timeoutMs = 4_000) {
+    if (inputArea) return new Promise(resolve => setTimeout(() => resolve({ visible: Boolean(inputArea), reason: describeHidden() }), 34));
+    return new Promise(resolve => {
+      let timer;
+      const done = ok => { clearTimeout(timer); visibilityWaiters.delete(onShow); setTimeout(() => resolve({ visible: ok && Boolean(inputArea), reason: describeHidden() }), ok ? 34 : 0); };
+      const onShow = () => done(true);
+      visibilityWaiters.add(onShow);
+      timer = setTimeout(() => done(false), Math.max(200, Math.min(10_000, Number(timeoutMs) || 4_000)));
+      timer.unref?.();
+    });
+  }
+  /** Ask the renderer to bring the browser panel forward, and wait for it. */
+  async function ensureVisible(timeoutMs) {
+    if (inputArea) return { visible: true, reason: '' };
+    try { if (window.isMinimized()) window.restore(); } catch { /* ignore */ }
+    publishGlobal({ openRequested: state.openRequested + 1 });
+    if (lastRequested && !viewport.visible && lastRequested.visible) resumeAfterWindowState();
+    return waitVisible(timeoutMs);
+  }
+
+  function hideForRendererChange(reason = '应用界面正在刷新布局') {
+    if (typeof reason === 'string') hiddenReason = reason;
     viewport = { ...viewport, visible: false };
     for (const tab of tabs) hideTab(tab);
   }
@@ -320,12 +374,14 @@ export function createEmbeddedBrowser({ window, appOrigin, WebContentsView, View
     if (!alive()) return;
     const { width, height } = window.getContentBounds();
     const changed = !lastContentSize || Math.abs(lastContentSize.width - width) > 2 || Math.abs(lastContentSize.height - height) > 2;
-    if (changed) hideForRendererChange();
+    if (changed) hideForRendererChange('窗口大小正在变化');
     settleAfterWindowChange();
   }
 
   function settleAfterWindowChange() {
     clearTimeout(windowSettleTimer);
+    for (const timer of debuggerTimers) clearTimeout(timer);
+    debuggerTimers.clear();
     windowSettleTimer = setTimeout(() => {
       windowSettleTimer = undefined;
       if (disposed || !alive() || viewport.visible || !lastRequested?.visible) return;
@@ -535,14 +591,22 @@ export function createEmbeddedBrowser({ window, appOrigin, WebContentsView, View
     // allowing one tab's source check to cancel downloads from every other tab.
     on(guestSession, 'will-download', (event, item, source) => {
       const owner = source && tabs.find(tab => !tab.closed && guest(tab) === source);
-      if (disposed || !owner || downloads.size || !browserUrlAllowed(item.getURL(), appOrigin, { resource: true })) {
+      if (disposed) {
         event.preventDefault();
         return;
       }
-      // Leave savePath unset so Electron asks where to save. Never open downloads.
-      item.setSaveDialogOptions({ title: '保存下载文件', buttonLabel: '保存', defaultPath: downloadName(item.getFilename()), properties: ['showOverwriteConfirmation'] });
-      downloads.set(item, owner.id);
-      item.once('done', () => downloads.delete(item));
+      // 1.4.4: a refused download says why instead of dying silently.
+      if (!browserUrlAllowed(item.getURL(), appOrigin, { resource: true })) {
+        event.preventDefault();
+        downloadNotice('这个下载地址不能在内置浏览器中保存，已取消。');
+        return;
+      }
+      // 1.4.4: a tab that already closed must not lose the file it asked for.
+      const started = startDownload(item, owner);
+      if (!started.ok) {
+        event.preventDefault();
+        downloadNotice(started.error);
+      }
     });
     return guestSession;
   }
@@ -612,7 +676,7 @@ export function createEmbeddedBrowser({ window, appOrigin, WebContentsView, View
       window.contentView.addChildView(tab.clipView);
       tab.clipView.addChildView(tab.view);
     } else window.contentView.addChildView(tab.view);
-    const userAgent = contents.getUserAgent().replace(/\s(?:Electron|Local-Harness|Harness-Gemini|local-harness)\/\S+/g, '');
+    const userAgent = contents.getUserAgent().replace(/\s(?:Local-?Harness|Harness-?Gemini|local-harness)\/\S+/gi, '');
     contents.setUserAgent(userAgent);
     const watch = (event, callback) => on(contents, event, callback, tab.listeners);
     const update = value => publish(value, tab);
@@ -752,11 +816,7 @@ export function createEmbeddedBrowser({ window, appOrigin, WebContentsView, View
     tab.fitTimer = undefined;
     hideTab(tab);
     for (const remove of tab.listeners.splice(0)) remove();
-    for (const [item, ownerId] of downloads) {
-      if (ownerId !== tab.id) continue;
-      downloads.delete(item);
-      try { item.cancel(); } catch { /* Already completed. */ }
-    }
+    // 1.4.4: closing a tab no longer cancels the downloads it started.
     if (tab.view) {
       try { if (!window.isDestroyed()) window.contentView.removeChildView(tab.clipView ?? tab.view); } catch { /* Window is closing. */ }
       const contents = guest(tab);
@@ -841,6 +901,31 @@ export function createEmbeddedBrowser({ window, appOrigin, WebContentsView, View
     contents.reload();
     return publish({ error: null }, tab);
   }
+
+  /**
+   * 1.4.1: drop everything the current page stored and load it again, so a site
+   * stuck on stale data (a dead service worker, an old cookie) can be reset
+   * without wiping the rest of the browser. Scoped to that site only.
+   */
+  async function clearSiteData() {
+    const tab = activeTab();
+    const contents = guest(tab);
+    if (!alive() || !contents) return { ...getState(), error: '内置浏览器暂时不可用。' };
+    const url = contents.getURL();
+    if (!url || url === 'about:blank' || isLocalFileUrl(url)) return { ...getState(), error: '当前页面没有可清除的网站数据。' };
+    let origin;
+    try { origin = new URL(url).origin; } catch { return { ...getState(), error: '无法识别当前网页的地址。' }; }
+    try {
+      await contents.session.clearData({ origins: [origin], originMatchingMode: 'origin-in-all-contexts' });
+    } catch {
+      return { ...getState(), error: '清除本站数据失败，请稍后重试。' };
+    }
+    tab.historyTravel = tab.historyIndex >= 0 ? tab.historyIndex : null;
+    beginHostNavigation(tab, url);
+    contents.reloadIgnoringCache();
+    return publish({ error: null }, tab);
+  }
+
   function stop() {
     const tab = activeTab();
     if (tab) { tab.hostNavigation = null; tab.historyTravel = null; tab.navigationSequence++; }
@@ -895,6 +980,7 @@ export function createEmbeddedBrowser({ window, appOrigin, WebContentsView, View
     if (!alive()) return unavailableState();
     if (!resolveNativeBrowserLayout(value, window.getContentBounds(), main.getZoomFactor())) return { ...getState(), error: '浏览器显示区域无效。' };
     const requested = { ...value, ...(value.clip ? { clip: { ...value.clip } } : {}), ...(value.emulation ? { emulation: { ...value.emulation } } : {}) };
+    if (!requested.visible) hiddenReason = (activeTab()?.automating ?? 0) > 0 ? '代理操作期间浏览器面板被收起（切换会话、折叠面板或切换右侧标签）' : '浏览器面板已被收起，或右侧切换到了其他面板';
     viewport = requested;
     lastRequested = requested;
     applyViewport();
@@ -920,14 +1006,18 @@ export function createEmbeddedBrowser({ window, appOrigin, WebContentsView, View
   }
 
   function openDevTools() {
-    if (alive() && guest() && browserUrlAllowed(activeTab()?.page.url, appOrigin)) guest().openDevTools({ mode: 'detach', activate: true });
+    const contents = guest();
+    // 1.4.1: our own debugging connection and the DevTools window both attach to
+    // the same page, and only one can. Release ours first so the window always opens.
+    if (contents) releaseDebugger(contents);
+    if (alive() && contents && browserUrlAllowed(activeTab()?.page.url, appOrigin)) contents.openDevTools({ mode: 'detach', activate: true });
     return getState();
   }
 
   async function open(url) {
     if (!alive() || (url !== undefined && !browserUrlAllowed(url, appOrigin))) return getState();
     publishGlobal({ openRequested: state.openRequested + 1 });
-    if (url === undefined) return getState();
+    if (url === undefined) { await waitVisible(4_000); return getState(); }
     const blank = tabs.find(tab => !tab.page.url && !guest(tab));
     const tab = blank ?? makeTab();
     if (!blank) tabs.push(tab);
@@ -956,6 +1046,13 @@ export function createEmbeddedBrowser({ window, appOrigin, WebContentsView, View
     if (value.disabled === true) element.disabled = true;
     if (value.checked === true) element.checked = true;
     if (value.inViewport === false) element.inViewport = false;
+    const context = text(value.context, 80);
+    if (context) element.context = context;
+    if (value.modal === true) element.modal = true;
+    if (value.frame === true) element.frame = true;
+    if (value.shadow === true) element.shadow = true;
+    if (Number.isInteger(value.nth) && value.nth > 0 && value.nth < 1000) element.nth = value.nth;
+    if (Number.isInteger(value.duplicates) && value.duplicates > 1 && value.duplicates < 1000) element.duplicates = value.duplicates;
     const type = text(value.type, 20);
     if (type) element.type = type;
     const current = text(value.value, 120);
@@ -981,6 +1078,7 @@ export function createEmbeddedBrowser({ window, appOrigin, WebContentsView, View
     if (!raw || typeof raw !== 'object') return { ...empty, url: tab.page.url, error: '无法读取这个页面的结构，请重新加载后再试。' };
     if (typeof raw.error === 'string' && raw.error) return { ...empty, url: tab.page.url, error: raw.error.slice(0, 500) };
     const viewportInfo = raw.viewport && typeof raw.viewport === 'object' ? raw.viewport : {};
+    const text = (input, max) => typeof input === 'string' ? input.slice(0, max) : '';
     const number = (input, fallback) => Number.isInteger(input) && Math.abs(input) <= 10_000_000 ? input : fallback;
     const elements = (Array.isArray(raw.elements) ? raw.elements : []).slice(0, MAX_SNAPSHOT_ELEMENTS).map(snapshotElement).filter(Boolean);
     return {
@@ -992,6 +1090,13 @@ export function createEmbeddedBrowser({ window, appOrigin, WebContentsView, View
         scrollWidth: number(viewportInfo.scrollWidth, 0), scrollHeight: number(viewportInfo.scrollHeight, 0),
       },
       elements, truncated: raw.truncated === true, error: null,
+      scroll: raw.scroll && typeof raw.scroll === 'object' ? {
+        container: raw.scroll.container === 'window' ? 'window' : text(raw.scroll.container?.name || raw.scroll.container?.tag, 80) || 'element',
+        scrollTop: number(raw.scroll.scrollTop, 0), scrollHeight: number(raw.scroll.scrollHeight, 0), clientHeight: number(raw.scroll.clientHeight, 0),
+      } : null,
+      modal: raw.modal && typeof raw.modal === 'object' ? { name: text(raw.modal.name, 120), elements: number(raw.modal.elements, 0) } : null,
+      pendingInputs: pendingList(tab),
+      visible: Boolean(inputArea), hiddenReason: describeHidden(),
     };
   }
 
@@ -1002,18 +1107,39 @@ export function createEmbeddedBrowser({ window, appOrigin, WebContentsView, View
    * reader sees: a chart, a layout, a rendered canvas. The bitmap is bounded here rather than
    * later, because an image is a base64 payload on every request that carries it.
    */
+  const debuggerSessions = new WeakMap();
+  const debuggerTimers = new Set();
+
+  function debuggerSessionFor(contents) {
+    let session = debuggerSessions.get(contents);
+    if (session) return session;
+    session = createDebuggerSession({
+      isAttached: () => contents.debugger.isAttached(),
+      attach: () => contents.debugger.attach('1.3'),
+      detach: () => contents.debugger.detach(),
+      schedule: (run, ms) => {
+        const timer = setTimeout(run, ms);
+        timer.unref?.();
+        debuggerTimers.add(timer);
+        return { cancel: () => { clearTimeout(timer); debuggerTimers.delete(timer); } };
+      },
+    });
+    debuggerSessions.set(contents, session);
+    return session;
+  }
+
+  function releaseDebugger(contents) {
+    debuggerSessions.get(contents)?.release();
+    debuggerSessions.delete(contents);
+  }
+
   async function captureLiveHidden(contents) {
     if (!nativeImage || !contents.debugger) return null;
-    let attachedHere = false;
     let timer;
     try {
-      if (!contents.debugger.isAttached()) {
-        contents.debugger.attach('1.3');
-        attachedHere = true;
-      }
-      const capture = contents.debugger.sendCommand('Page.captureScreenshot', {
+      const capture = debuggerSessionFor(contents).run(() => contents.debugger.sendCommand('Page.captureScreenshot', {
         format: 'png', fromSurface: true, captureBeyondViewport: false,
-      });
+      }));
       const deadline = new Promise((_resolve, reject) => {
         timer = setTimeout(() => reject(new Error('Hidden capture timeout')), 2_000);
         timer.unref?.();
@@ -1021,10 +1147,7 @@ export function createEmbeddedBrowser({ window, appOrigin, WebContentsView, View
       const result = await Promise.race([capture, deadline]);
       return result?.data ? nativeImage.createFromBuffer(Buffer.from(result.data, 'base64')) : null;
     } catch { return null; }
-    finally {
-      clearTimeout(timer);
-      if (attachedHere) { try { contents.debugger.detach(); } catch { /* Guest closed. */ } }
-    }
+    finally { clearTimeout(timer); }
   }
 
   async function captureOffscreen(tab, contents) {
@@ -1144,14 +1267,33 @@ export function createEmbeddedBrowser({ window, appOrigin, WebContentsView, View
    * before the event is dispatched, so a click never lands where a re-rendering
    * framework has already moved the element.
    */
+  function pendingList(tab) {
+    if (!tab?.pendingInputs?.size) return [];
+    if (tab.pendingInputsUrl && tab.pendingInputsUrl !== tab.page.url) { tab.pendingInputs.clear(); return []; }
+    return [...tab.pendingInputs.values()].slice(0, 10);
+  }
+  function pendingText(list) {
+    if (!list.length) return '';
+    const items = list.map(item => `${item.ref} ${item.role || ''}“${String(item.name || '').slice(0, 30)}”${item.context ? `（${item.context.slice(0, 30)}）` : ''}${item.hidden ? '' : ` = “${String(item.value).slice(0, 60)}”`}`).join('；');
+    return ` 注意：页面上还有未提交的输入：${items}。这些值只是填进了输入框，尚未通过点击保存/提交生效；请先让面板显示后完成提交，或告诉用户这些修改没有生效（不要根据输入框里显示的值判断已生效）。`;
+  }
+
   async function act(request) {
     const tab = activeTab();
     const contents = guest(tab);
     if (!alive() || !contents) return { ok: false, error: '内置浏览器暂时不可用。' };
-    if (!tab.page.url) return { ok: false, error: '内置浏览器当前没有打开的网页。' };
+    if (!tab.page.url) return { ok: false, error: '内置浏览器当前没有打开的网页。' + pendingText(pendingList(tab)) };
     try {
       const normalized = normalizeRequest(request);
       if (contents.isLoading()) await waitForLoad(contents, 5_000);
+      // 1.4.1-browserfix: one rule for every input action. Real input needs the panel on
+      // screen, so bring it up first and only refuse when it truly cannot be shown.
+      if (!inputArea) {
+        const shown = await ensureVisible(4_000);
+        if (!shown.visible) {
+          return { ok: false, error: `内置浏览器面板当前没有显示（原因：${shown.reason || '未知'}），已尝试自动打开但没有成功，本次 ${normalized.kind} 没有执行。请让用户展开右侧浏览器面板后重试。` + pendingText(pendingList(tab)) };
+        }
+      }
       const input = createBrowserInput({
         bounds: inputArea?.bounds ?? { width: 0, height: 0 },
         visible: inputArea?.visible,
@@ -1164,31 +1306,178 @@ export function createEmbeddedBrowser({ window, appOrigin, WebContentsView, View
       let result;
       try { result = await input[normalized.kind](normalized); }
       finally { setTimeout(() => { tab.automating = Math.max(0, (tab.automating ?? 1) - 1); }, 250).unref?.(); }
-      return { ok: true, result: { ...result, url: contents.getURL().slice(0, 4096) } };
+      const url = contents.getURL().slice(0, 4096);
+      if (!tab.pendingInputs || tab.pendingInputsUrl !== url) { tab.pendingInputs = new Map(); tab.pendingInputsUrl = url; }
+      if (normalized.kind === 'type') {
+        if (result.submitted || !result.stillPresent) tab.pendingInputs.delete(normalized.ref);
+        else tab.pendingInputs.set(normalized.ref, { ref: normalized.ref, role: result.target?.role ?? '', name: result.target?.name ?? '', context: result.target?.context ?? '', value: result.valueAfter ?? normalized.text, hidden: result.valueHidden === true });
+      } else if (normalized.kind === 'press' && normalized.text !== undefined && result.focusedElement?.ref) {
+        tab.pendingInputs.set(result.focusedElement.ref, { ref: result.focusedElement.ref, role: result.focusedElement.role, name: result.focusedElement.name, context: result.focusedElement.context ?? '', value: normalized.text });
+      } else if (normalized.kind === 'press' && normalized.keys.some(key => key.key === 'Return')) {
+        tab.pendingInputs.clear();
+      }
+      // A click may well be the submit; keep the list but let the model know to verify.
+      return { ok: true, result: { ...result, url, pendingInputs: pendingList(tab) } };
     } catch (error) {
       const text = error && error.message ? String(error.message) : String(error ?? '');
-      return { ok: false, error: text.slice(0, 500) || '内置浏览器未能完成这个操作。' };
+      return { ok: false, error: (text.slice(0, 400) || '内置浏览器未能完成这个操作。') + pendingText(pendingList(tab)) };
     }
   }
 
-  const commands = { getState, navigate, newTab, activateTab, closeTab, reopenTab, back: () => travel('back'), forward: () => travel('forward'), reload, stop, readPage, snapshot, act, screenshot: captureScreenshot, home, setViewport, setPresentation, openExternal, openDevTools };
+  /** The panel's real visibility, for browser_open and the model. */
+  async function visibility(timeoutMs) {
+    const result = await waitVisible(Number.isFinite(timeoutMs) ? timeoutMs : 4_000);
+    return { ...getState(), visible: result.visible, hiddenReason: result.reason };
+  }
+
+  // ---- 1.4.4: downloads with real progress, cancellation and "show in folder" ----
+  function downloadFolder() {
+    return typeof downloadsDirectory === 'string' && downloadsDirectory ? downloadsDirectory : '';
+  }
+
+  function uniqueDownloadTarget(directory, filename) {
+    if (!directory) return '';
+    const base = downloadName(filename);
+    const dot = base.lastIndexOf('.');
+    const ext = dot > 0 ? base.slice(dot) : '';
+    const stem = dot > 0 ? base.slice(0, dot) : base;
+    let candidate = path.join(directory, base);
+    for (let index = 1; index < 10_000 && fs.existsSync(candidate); index += 1) {
+      candidate = path.join(directory, `${stem} (${index})${ext}`);
+    }
+    return candidate;
+  }
+
+  function downloadSnapshot() {
+    return [...downloads.values()].map(record => ({ ...record }));
+  }
+
+  function publishDownloads(immediate = false) {
+    if (disposed) return;
+    const flush = () => {
+      downloadTimer = null;
+      if (disposed) return;
+      try { main.send(BROWSER_DOWNLOADS_CHANNEL, { downloads: downloadSnapshot() }); } catch { /* Renderer may be reloading. */ }
+    };
+    if (immediate) {
+      if (downloadTimer) { clearTimeout(downloadTimer); downloadTimer = null; }
+      flush();
+      return;
+    }
+    if (downloadTimer) return;
+    downloadTimer = setTimeout(flush, 250);
+    downloadTimer.unref?.();
+  }
+
+  function downloadNotice(message) {
+    if (disposed) return;
+    try { main.send(BROWSER_DOWNLOADS_CHANNEL, { downloads: downloadSnapshot(), notice: String(message).slice(0, 200) }); } catch { /* Renderer may be reloading. */ }
+  }
+
+  function sampleDownload(record, item, state) {
+    const received = Math.max(0, Number(item.getReceivedBytes?.() ?? 0));
+    const total = Math.max(0, Number(item.getTotalBytes?.() ?? 0));
+    const now = Date.now();
+    const elapsed = now - (record.sampledAt ?? record.startedAt);
+    if (elapsed >= 400) {
+      const delta = received - (record.sampledBytes ?? 0);
+      record.speed = delta > 0 ? Math.round(delta / (elapsed / 1000)) : 0;
+      record.sampledAt = now;
+      record.sampledBytes = received;
+    }
+    record.received = received;
+    record.total = total;
+    if (state) record.state = state;
+  }
+
+  /** 1.4.4: no native save dialog. A dialog could open behind the window and make the click
+   *  look dead forever; the file goes into the Downloads folder under a free name instead. */
+  function startDownload(item, owner) {
+    const active = [...downloads.values()].filter(record => record.state === 'progressing').length;
+    if (active >= MAX_ACTIVE_DOWNLOADS) return { ok: false, error: `同时下载的文件太多（最多 ${MAX_ACTIVE_DOWNLOADS} 个），已取消这一个。` };
+    let savePath = '';
+    try { savePath = uniqueDownloadTarget(downloadFolder(), item.getFilename()); } catch { savePath = ''; }
+    if (!savePath) return { ok: false, error: '无法确定下载的保存位置（找不到“下载”文件夹），已取消这个下载。' };
+    item.setSavePath(savePath);
+    const record = {
+      id: `d${++downloadSequence}`,
+      name: downloadName(item.getFilename()),
+      url: String(item.getURL() ?? '').slice(0, 2_048),
+      savePath,
+      state: 'progressing',
+      received: 0,
+      total: Math.max(0, Number(item.getTotalBytes?.() ?? 0)),
+      speed: 0,
+      startedAt: Date.now(),
+      sampledAt: Date.now(),
+      sampledBytes: 0,
+      tabId: owner?.id ?? null,
+      error: '',
+    };
+    downloads.set(item, record);
+    item.on('updated', () => { sampleDownload(record, item); publishDownloads(); });
+    item.once('done', (_event, state) => {
+      sampleDownload(record, item, state === 'completed' ? 'completed' : state === 'cancelled' ? 'cancelled' : 'interrupted');
+      if (state === 'completed') { try { record.savePath = item.getSavePath() || record.savePath; } catch { /* keep the planned name. */ } }
+      if (state === 'interrupted') record.error = '下载中断，可以重新下载。';
+      publishDownloads(true);
+    });
+    publishDownloads(true);
+    return { ok: true };
+  }
+
+  function findDownload(id) {
+    if (typeof id !== 'string') return null;
+    for (const [item, record] of downloads) if (record.id === id) return { item, record };
+    return null;
+  }
+
+  function cancelDownload(id) {
+    const found = findDownload(id);
+    if (!found) return { ok: false, error: '找不到这个下载。' };
+    try { found.item.cancel(); } catch { /* Already finished. */ }
+    return { ok: true };
+  }
+
+  function revealDownload(id) {
+    const target = findDownload(id)?.record.savePath;
+    if (!target) return { ok: false, error: '这个下载还没有保存成文件。' };
+    if (typeof revealDownloadPath !== 'function') return { ok: false, error: '当前无法打开文件所在位置。' };
+    if (!fs.existsSync(target)) return { ok: false, error: '文件已经不在原来的位置（可能被移动或删除）。' };
+    try { revealDownloadPath(target); return { ok: true }; } catch { return { ok: false, error: '无法打开文件所在位置。' }; }
+  }
+
+  function clearDownloads() {
+    for (const [item, record] of [...downloads]) if (record.state !== 'progressing') downloads.delete(item);
+    publishDownloads(true);
+    return { ok: true };
+  }
+
+  const commands = { getState, visibility, navigate, newTab, activateTab, closeTab, reopenTab, back: () => travel('back'), forward: () => travel('forward'), reload, stop, readPage, snapshot, act, screenshot: captureScreenshot, home, setViewport, setPresentation, openExternal, openDevTools, clearSiteData };
   ipcMain.handle(BROWSER_COMMAND_CHANNEL, (event, command, ...args) => {
-    const expectedArgs = ['navigate', 'setViewport', 'setPresentation', 'activateTab', 'closeTab', 'readPage', 'act', 'screenshot'].includes(command) ? 1 : 0;
+    const expectedArgs = ['navigate', 'setViewport', 'setPresentation', 'activateTab', 'closeTab', 'readPage', 'act', 'screenshot', 'visibility'].includes(command) ? 1 : 0;
     const validArgs = command === 'newTab' ? args.length <= 1 : command === 'screenshot' ? args.length <= 1 : args.length === expectedArgs;
     if (!alive() || event.sender !== main || event.senderFrame !== main.mainFrame || !ownUrl(event.senderFrame?.url)
       || typeof command !== 'string' || !Object.hasOwn(commands, command) || !validArgs) return unavailableState();
     return commands[command](...args);
   });
+  ipcMain.handle(BROWSER_DOWNLOAD_COMMAND_CHANNEL, (event, action, id) => {
+    if (!alive() || event.sender !== main || event.senderFrame !== main.mainFrame || !ownUrl(event.senderFrame?.url)) return { ok: false, error: "浏览器暂时不可用。" };
+    if (action === 'cancel') return cancelDownload(id);
+    if (action === 'reveal') return revealDownload(id);
+    if (action === 'clear') return clearDownloads();
+    return { ok: false, error: "未知的下载操作。" };
+  });
   on(main, 'did-start-navigation', (event, _url, _inPlace, isMainFrame) => { if (event.isMainFrame ?? isMainFrame) hideForRendererChange(); });
-  on(main, 'render-process-gone', hideForRendererChange);
-  on(main, 'did-start-loading', hideForRendererChange);
+  on(main, 'render-process-gone', () => hideForRendererChange('应用界面进程崩溃'));
+  on(main, 'did-start-loading', () => hideForRendererChange('应用界面正在重新加载'));
   on(main, 'did-stop-loading', applyViewport);
   on(window, 'resize', windowResized);
   on(window, 'moved', settleAfterWindowChange);
-  on(window, 'minimize', hideForRendererChange);
+  on(window, 'minimize', () => hideForRendererChange('应用窗口已最小化'));
   on(window, 'restore', resumeAfterWindowState);
   on(window, 'show', resumeAfterWindowState);
-  on(main, 'zoom-changed', () => { hideForRendererChange(); settleAfterWindowChange(); scheduleFit(activeTab(), 300); });
+  on(main, 'zoom-changed', () => { hideForRendererChange('界面缩放正在变化'); settleAfterWindowChange(); scheduleFit(activeTab(), 300); });
   on(window, 'closed', dispose);
 
   function dispose() {
@@ -1198,6 +1487,8 @@ export function createEmbeddedBrowser({ window, appOrigin, WebContentsView, View
     void offlineProxy.close();
     clearTimeout(windowSettleTimer);
     ipcMain.removeHandler(BROWSER_COMMAND_CHANNEL);
+    ipcMain.removeHandler(BROWSER_DOWNLOAD_COMMAND_CHANNEL);
+    if (downloadTimer) { clearTimeout(downloadTimer); downloadTimer = null; }
     for (const remove of listeners.splice(0)) remove();
     for (const tab of tabs) destroyTab(tab);
     tabs.length = 0;

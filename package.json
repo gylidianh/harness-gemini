@@ -1,9 +1,9 @@
 {
   "name": "harness-gemini-development",
-  "version": "1.3.10",
+  "version": "1.4.4",
   "private": true,
   "type": "module",
-  "description": "Development and packaging tools for Harness Gemini 1.3.10",
+  "description": "Development and packaging tools for Harness Gemini 1.4.4",
   "engines": { "node": ">=22.12" },
   "scripts": {
     "start": "node tools/run.mjs server",

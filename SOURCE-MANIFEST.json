@@ -1,8 +1,8 @@
 {
-  "version": "1.3.10",
-  "release": "https://github.com/gylidianh/harness-gemini/releases/tag/v1.3.10",
-  "installerSha256": "fde0e554e492c9014ee55265af78287f673be915a6a9b327a0fa45514c63a17b",
-  "appArchiveSha256": "980a85bf39b3e0e2bd164793ca1836e8b01b14fd0303aa3690f48bacbba36c51",
+  "version": "1.4.4",
+  "release": "https://github.com/gylidianh/harness-gemini/releases/tag/v1.4.4",
+  "installerSha256": "e890b2620cee91c4844427282b14f216dc627740b04e08f81c40bafa70d81b8b",
+  "appArchiveSha256": "05ec57bc4208bf2eef0b3b79a6f76f2711f2d9f7d22e439a292cf436d999ce26",
   "scope": "Desktop, server, shared modules, editable UI modules, prebuilt frontend assets and notices. Original React source is unavailable.",
   "excluded": [
     "node_modules",
@@ -28,8 +28,8 @@
     },
     {
       "path": "app/desktop/browser.mjs",
-      "sha256": "24c0824d2eccab0f6acd515e00342849c00b051dc54b780ca2422d575ed259e4",
-      "bytes": 66329
+      "sha256": "ad9bd90fd8671d13946e4db6b9aaebf11467c883a87ed2f928c5fa4408551b76",
+      "bytes": 80600
     },
     {
       "path": "app/desktop/completion-notifications.mjs",
@@ -42,9 +42,14 @@
       "bytes": 3881
     },
     {
+      "path": "app/desktop/debugger-session.mjs",
+      "sha256": "0695d081f5cda1a8a78adbfaf0bf831788fd98bc9f70e8c5c00f7f02d32fe0ba",
+      "bytes": 2086
+    },
+    {
       "path": "app/desktop/main.mjs",
-      "sha256": "e5352ca82fb9e5529d16c94a452b663a423e71d5756f5a5e2b3a2ebeaee3d75e",
-      "bytes": 50143
+      "sha256": "cb8330ef8be85735ec971344e8d1b5e5d6d7f85ee3caa013d43c089def465768",
+      "bytes": 49562
     },
     {
       "path": "app/desktop/native-affinity.mjs",
@@ -83,8 +88,8 @@
     },
     {
       "path": "app/desktop/preload.cjs",
-      "sha256": "a35a1af7a604ad36c245d5d2ff917e83659ed4da26b1f500fc96034c43012ce1",
-      "bytes": 30311
+      "sha256": "ef1844f4ceb73bd61d7bf626819f4b7dd746e341e149615a1982d76d6a78f223",
+      "bytes": 45721
     },
     {
       "path": "app/desktop/read-window-affinity.ps1",
@@ -113,13 +118,13 @@
     },
     {
       "path": "app/dist/assets/index-BbYfWXft.css",
-      "sha256": "ee0573ce461371d5a8148201e49e4ce396d371ae2c1aed1451a1b3de8081c679",
-      "bytes": 170010
+      "sha256": "54e25901f70adf1b0e89e9136930bab156ee71357679b5664ba225baa2b9ac46",
+      "bytes": 169755
     },
     {
       "path": "app/dist/assets/index-BWW8q4t7.js",
-      "sha256": "71f59fd92f7a7309f822c3f13492e50fe2cb93b06985d75567224448df3b8e31",
-      "bytes": 886492
+      "sha256": "7f614637580f8867b16e9b1b015484b030f2a6af60bb100eb77e258676754280",
+      "bytes": 890575
     },
     {
       "path": "app/dist/assets/KaTeX_AMS-Regular-BQhdFMY1.woff2",
@@ -423,13 +428,13 @@
     },
     {
       "path": "app/dist/composer-controls.css",
-      "sha256": "40eab10e7ba6767a1fc3b80dd28b240704583872a81e1917ddd0cd0b13001413",
-      "bytes": 5161
+      "sha256": "56346de19f42af978fd17ef0517bdeffc67869504c16f186ca1b173e506d9fe8",
+      "bytes": 6217
     },
     {
       "path": "app/dist/composer-controls.js",
-      "sha256": "29bda06d38a68752deebd93836633d10b297c68c01ec30e2864f4071fc4fd9cf",
-      "bytes": 5465
+      "sha256": "ef1a4459cb4b94613a25b96954af42761fdbf2d8e2bdffa470e19d46e5863384",
+      "bytes": 8874
     },
     {
       "path": "app/dist/dialog-focus.js",
@@ -438,18 +443,18 @@
     },
     {
       "path": "app/dist/index.html",
-      "sha256": "39880a1f8d50a01f7fecb16c458c2ef53dd431b5811eadddff442a11c275c0be",
-      "bytes": 714
+      "sha256": "ed73074ff1028640aabd02566ad3c1520140b84ef534a9077f776da6a9adc356",
+      "bytes": 768
     },
     {
       "path": "app/dist/model-selector.css",
-      "sha256": "54a2504ff98a4acbb0e301bd2f649f90c2cb6be042fb9dcec5fa5b495077d6ef",
-      "bytes": 11903
+      "sha256": "09482a8cffc2a43449bb375d308c591204587b8263cc33c23352c6dc47866e86",
+      "bytes": 12046
     },
     {
       "path": "app/dist/model-selector.js",
-      "sha256": "3ef43a5ec2feca917568982671a1158cc793a772ba278d0e67df44cdd1edfddc",
-      "bytes": 18491
+      "sha256": "ed7e43b2cbb60768b93a23836416404236ad1b7db12d6b3d8a1938b48c0abcd3",
+      "bytes": 19385
     },
     {
       "path": "app/dist/provider-brand-data.js",
@@ -507,14 +512,24 @@
       "bytes": 1600
     },
     {
+      "path": "app/dist/session-tools.css",
+      "sha256": "af9d263faa02c2086018290791580fc4693b32351ff005a95ae163615bbe5192",
+      "bytes": 9038
+    },
+    {
+      "path": "app/dist/session-tools.js",
+      "sha256": "eea41fd365973df1ad56168861d11522283215fd2c386c6cc783ad48dab1ea57",
+      "bytes": 28438
+    },
+    {
       "path": "app/dist/settings-layout.js",
-      "sha256": "32ab7564b07be09fa395e5013152a79b5a9bedaae6b56244921724fa13d86255",
-      "bytes": 6805
+      "sha256": "d27d8bbe1c2ac05e32c83a956958a12b851f59a79b2a64845e60fc9af3f8f370",
+      "bytes": 6732
     },
     {
       "path": "app/dist/settings-ui.css",
-      "sha256": "e69da8407674930adef037c7444a8b64cecbaecc259268ce3637e9324be17f35",
-      "bytes": 13282
+      "sha256": "099d486d7d3be0193241bcc7daac113bfcadc26c4953770c6a66b7adf974440c",
+      "bytes": 13379
     },
     {
       "path": "app/dist/skills-ui.js",
@@ -523,18 +538,18 @@
     },
     {
       "path": "app/dist/ui-port.css",
-      "sha256": "14865140d2f008a897c019967f1d85fd6bb9e583ba41ac36b95b874f30e4ff62",
-      "bytes": 385
+      "sha256": "4b559c59009b440b76e962bd302f396a11d2b8bb9c9fe960e41d7ad1187dec32",
+      "bytes": 683
     },
     {
       "path": "app/package.json",
-      "sha256": "e00342f18c752da7880487c2977a76ed4b7c6e51bfd1986d8f97a2f2edb2b6ce",
-      "bytes": 733
+      "sha256": "f3d30a30242d3e5031ab93a7ffa4a40a1def7e4c24b3fd06a672b07a4e87883f",
+      "bytes": 732
     },
     {
       "path": "app/server/app.mjs",
-      "sha256": "8b149ac79c8a30effa0277bcb0ed22fdbcc26926a61a378a0ed066957d7af46d",
-      "bytes": 115128
+      "sha256": "2ed4931d83e3a5ab977a4b9d8739b56a7afacf1fea28f6676935ef28565a2142",
+      "bytes": 117151
     },
     {
       "path": "app/server/attachments.mjs",
@@ -543,8 +558,8 @@
     },
     {
       "path": "app/server/browser-bridge.mjs",
-      "sha256": "867a87da698cd13ac8c36a5919a1d2cb553635fb9480c2c5ab89079bf3115df1",
-      "bytes": 10108
+      "sha256": "7a5e496d6a086dcaadc34072c01f8d8468874535226cbb91ce20bace3878cc02",
+      "bytes": 13015
     },
     {
       "path": "app/server/context.mjs",
@@ -693,8 +708,8 @@
     },
     {
       "path": "app/server/store.mjs",
-      "sha256": "6e69aec6f2475b01de932afe2c131f6fa21a22e9b87e2bd38a6264e40e2851cd",
-      "bytes": 35252
+      "sha256": "459c59bf98be74fc5b8a4bb6789c64b9b58a3cfb83ddfbe2af6cfdcb4d8f91db",
+      "bytes": 47851
     },
     {
       "path": "app/server/subagent.mjs",
@@ -708,8 +723,8 @@
     },
     {
       "path": "app/server/tools.mjs",
-      "sha256": "2e47e6d4366d3d788e5cee43c1fe18291488bfeabf39041700604a15775a7d45",
-      "bytes": 48485
+      "sha256": "c033824d94b6b95e0ea2ba2528e6e5f87070c77e0480267559f1aa8be327fff2",
+      "bytes": 51844
     },
     {
       "path": "app/server/util.mjs",
@@ -743,8 +758,8 @@
     },
     {
       "path": "app/shared/browser-input.mjs",
-      "sha256": "d08b6fdbd82bc28b4c8d845006c3d9b8f38c22eee25bcc5c81163b2e90326f82",
-      "bytes": 25802
+      "sha256": "5c1a50da7d16f2de08d2f651d008560373f768f9252c2464623ff969ea9f8db3",
+      "bytes": 42430
     },
     {
       "path": "app/shared/browser-navigation.mjs",

@@ -7,7 +7,45 @@ import { identityCodec, isSealedSecret } from './secret.mjs';
 import { isReasoningLevel, storedReasoningLevel } from '../shared/reasoning-effort.mjs';
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-const CORRUPT_SESSION_TEXT = '这个会话文件已损坏，无法打开；可以在侧边栏删除它，原文件会移到 deleted-sessions 文件夹保留。';
+const CORRUPT_SESSION_TEXT = '这个会话文件已损坏，无法打开；可以在侧边栏直接将它删除。';
+const ARTIFACT_FILE_RE = /^[a-f0-9]{36}\.(?:png|jpg|webp|gif)$/i;
+const ARTIFACT_URL_GLOBAL_RE = /\/api\/artifacts\/([a-f0-9]{36}\.(?:png|jpg|webp|gif))/gi;
+
+function extractArtifactNamesFromSession(session) {
+  const out = new Set();
+  if (!isObject(session) || !Array.isArray(session.messages)) return out;
+  const addUrl = url => {
+    if (typeof url !== 'string') return;
+    const m = /^\/api\/artifacts\/([a-f0-9]{36}\.(?:png|jpg|webp|gif))(?:\?|$)/i.exec(url.trim());
+    if (m && ARTIFACT_FILE_RE.test(m[1])) out.add(m[1].toLowerCase());
+  };
+  for (const msg of session.messages) {
+    if (!isObject(msg)) continue;
+    for (const art of msg.artifacts ?? []) {
+      if (isObject(art)) addUrl(art.url);
+    }
+    for (const tool of msg.tools ?? []) {
+      if (!isObject(tool)) continue;
+      for (const art of tool.artifacts ?? []) {
+        if (isObject(art)) addUrl(art.url);
+      }
+    }
+    if (typeof msg.text === 'string' && msg.text.includes('/api/artifacts/')) {
+      for (const m of msg.text.matchAll(ARTIFACT_URL_GLOBAL_RE)) {
+        if (m[1] && ARTIFACT_FILE_RE.test(m[1])) out.add(m[1].toLowerCase());
+      }
+    }
+  }
+  return out;
+}
+
+function isSafeSessionWorkspaceDir(candidate, sessionIdKey) {
+  if (typeof candidate !== 'string' || !path.isAbsolute(candidate)) return false;
+  const resolved = path.resolve(candidate);
+  const base = path.basename(resolved).toLowerCase();
+  const parent = path.basename(path.dirname(resolved)).toLowerCase();
+  return base === sessionIdKey.toLowerCase() && parent === 'sessions';
+}
 const APPROVAL_MODES = new Set(['ask', 'smart', 'full']);
 const MODEL_FIELDS = ['chatModel', 'agentModel', 'imageModel'];
 /** The wire format one connection speaks. Chat Completions stays the default for old profiles. */
@@ -183,8 +221,11 @@ export class Store {
     this.settingsFile = path.join(this.dataDir, 'settings.json');
     this.settingsBackupFile = path.join(this.dataDir, 'settings.json.bak');
     this.stateFile = path.join(this.dataDir, 'state.json');
+    this.sessionMetaFile = path.join(this.dataDir, 'session-meta.json');
     this.settingsQueue = Promise.resolve();
     this.stateQueue = Promise.resolve();
+    this.metaQueue = Promise.resolve();
+    this.sessionMeta = {};
     this.sessionQueues = new Map();
   }
 
@@ -217,6 +258,26 @@ export class Store {
     });
     this.state = isObject(remembered) && UUID.test(String(remembered.lastSessionId ?? '')) ? { lastSessionId: String(remembered.lastSessionId).toLowerCase() } : {};
     if (this.lastSessionId && !(await fs.access(this.sessionFile(this.lastSessionId)).then(() => true, () => false))) await this.forgetSession();
+    const rawMeta = await readJson(this.sessionMetaFile, {}).catch(async error => {
+      if (!(error instanceof SyntaxError)) throw error;
+      await fs.rename(this.sessionMetaFile, `${this.sessionMetaFile}.corrupt-${Date.now()}`).catch(() => {});
+      return {};
+    });
+    this.sessionMeta = {};
+    if (isObject(rawMeta)) {
+      for (const [k, v] of Object.entries(rawMeta)) {
+        if (!UUID.test(k) || !isObject(v)) continue;
+        const pinned = Boolean(v.pinned);
+        const locked = Boolean(v.locked);
+        if (!pinned && !locked) continue;
+        this.sessionMeta[k.toLowerCase()] = {
+          pinned,
+          pinnedAt: pinned && typeof v.pinnedAt === 'string' ? v.pinnedAt : null,
+          locked,
+          lockedAt: locked && typeof v.lockedAt === 'string' ? v.lockedAt : null,
+        };
+      }
+    }
     await this.recoverInterruptedSessions();
     return this;
   }
@@ -546,6 +607,88 @@ export class Store {
     return this.ensureSessionWorkspace(await this.getSession(sessionId));
   }
 
+  getSessionMeta(id) {
+    if (typeof id !== 'string' || !UUID.test(id)) {
+      return { pinned: false, pinnedAt: null, locked: false, lockedAt: null };
+    }
+    const entry = this.sessionMeta?.[id.toLowerCase()];
+    const pinned = Boolean(entry?.pinned);
+    const locked = Boolean(entry?.locked);
+    return {
+      pinned,
+      pinnedAt: pinned ? (entry?.pinnedAt ?? null) : null,
+      locked,
+      lockedAt: locked ? (entry?.lockedAt ?? null) : null,
+    };
+  }
+
+  isSessionLocked(id) {
+    return this.getSessionMeta(id).locked;
+  }
+
+  withSessionMeta(session) {
+    if (!isObject(session)) return session;
+    const meta = this.getSessionMeta(session.id);
+    const pinned = meta.pinned || Boolean(session.pinned);
+    const locked = meta.locked || Boolean(session.locked);
+    return {
+      ...session,
+      pinned,
+      pinnedAt: pinned ? (meta.pinnedAt ?? session.pinnedAt ?? null) : null,
+      locked,
+      lockedAt: locked ? (meta.lockedAt ?? session.lockedAt ?? null) : null,
+    };
+  }
+
+  writeSessionMeta(next = this.sessionMeta) {
+    const snapshot = JSON.stringify(next, null, 2);
+    const operation = this.metaQueue.then(async () => {
+      await atomicWrite(this.sessionMetaFile, snapshot);
+      this.sessionMeta = next;
+    });
+    this.metaQueue = operation.catch(() => {});
+    return operation;
+  }
+
+  async updateSessionFlags(id, patch = {}) {
+    requireObject(patch);
+    const file = this.sessionFile(id);
+    const key = id.toLowerCase();
+    const exists = await fs.access(file).then(() => true, () => false);
+    if (!exists) throw new HttpError(404, '会话不存在。');
+    if ('pinned' in patch && typeof patch.pinned !== 'boolean') throw new HttpError(400, 'pinned 必须是布尔值。');
+    if ('locked' in patch && typeof patch.locked !== 'boolean') throw new HttpError(400, 'locked 必须是布尔值。');
+    const prev = this.getSessionMeta(key);
+    const now = new Date().toISOString();
+    const pinned = 'pinned' in patch ? patch.pinned : prev.pinned;
+    const locked = 'locked' in patch ? patch.locked : prev.locked;
+    const entry = {
+      pinned,
+      pinnedAt: pinned ? (prev.pinned && prev.pinnedAt ? prev.pinnedAt : now) : null,
+      locked,
+      lockedAt: locked ? (prev.locked && prev.lockedAt ? prev.lockedAt : now) : null,
+    };
+    const nextMeta = { ...this.sessionMeta };
+    if (entry.pinned || entry.locked) nextMeta[key] = entry;
+    else delete nextMeta[key];
+    await this.writeSessionMeta(nextMeta);
+    return { id: key, ...entry };
+  }
+
+  sortSessionSummaries(sessions) {
+    return sessions.filter(Boolean).sort((a, b) => {
+      const ap = Boolean(a.pinned);
+      const bp = Boolean(b.pinned);
+      if (ap !== bp) return bp ? 1 : -1;
+      if (ap && bp) {
+        const at = String(a.pinnedAt || a.updatedAt || a.createdAt || '');
+        const bt = String(b.pinnedAt || b.updatedAt || b.createdAt || '');
+        if (bt !== at) return bt.localeCompare(at);
+      }
+      return String(b.updatedAt).localeCompare(String(a.updatedAt));
+    });
+  }
+
   async getSession(id) {
     let session;
     try { session = await readJson(this.sessionFile(id), null); }
@@ -556,7 +699,7 @@ export class Store {
     }
     if (!session) throw new HttpError(404, '会话不存在。');
     if (!isObject(session) || !Array.isArray(session.messages)) throw new HttpError(422, CORRUPT_SESSION_TEXT);
-    return session;
+    return this.withSessionMeta(session);
   }
 
   async createSession(title = '新对话') {
@@ -565,7 +708,7 @@ export class Store {
     const workspace = await fs.realpath(await this.ensureSessionWorkspace({ id }));
     const session = { id, title, workspace, createdAt: now, updatedAt: now, messages: [] };
     await this.saveSession(session);
-    return session;
+    return this.withSessionMeta(session);
   }
 
   saveSession(session) {
@@ -587,55 +730,243 @@ export class Store {
     const sessions = await Promise.all(names.filter(name => name.endsWith('.json') && UUID.test(name.slice(0, -5))).map(async name => {
       const file = path.join(this.sessionDir, name);
       const id = name.slice(0, -5).toLowerCase();
+      const meta = this.getSessionMeta(id);
       const fallbackTime = async () => (await fs.stat(file).catch(() => null))?.mtime?.toISOString?.() ?? new Date(0).toISOString();
       let session;
       try { session = await readJson(file, null); }
       catch (error) {
         if (error?.code === 'ENOENT') return null;
         const time = await fallbackTime();
-        return { id, title: '（已损坏的会话，可删除）', createdAt: time, updatedAt: time, messageCount: 0, corrupt: true };
+        return { id, title: '（已损坏的会话，可删除）', createdAt: time, updatedAt: time, messageCount: 0, corrupt: true, ...meta };
       }
       if (!session) return null;
       if (!isObject(session)) {
         const time = await fallbackTime();
-        return { id, title: '（已损坏的会话，可删除）', createdAt: time, updatedAt: time, messageCount: 0, corrupt: true };
+        return { id, title: '（已损坏的会话，可删除）', createdAt: time, updatedAt: time, messageCount: 0, corrupt: true, ...meta };
       }
       const text = value => (typeof value === 'string' && value ? value : null);
       const updatedAt = text(session.updatedAt) ?? text(session.createdAt) ?? await fallbackTime();
+      const pinned = meta.pinned || Boolean(session.pinned);
+      const locked = meta.locked || Boolean(session.locked);
       return {
         id, title: typeof session.title === 'string' ? session.title : '新对话',
         createdAt: text(session.createdAt) ?? updatedAt, updatedAt,
         messageCount: Array.isArray(session.messages) ? session.messages.length : 0,
+        pinned,
+        pinnedAt: pinned ? (meta.pinnedAt ?? session.pinnedAt ?? null) : null,
+        locked,
+        lockedAt: locked ? (meta.lockedAt ?? session.lockedAt ?? null) : null,
       };
     }));
-    return sessions.filter(Boolean).sort((a, b) => String(b.updatedAt).localeCompare(String(a.updatedAt)));
+    return this.sortSessionSummaries(sessions);
   }
 
-  async deleteSession(id) {
+  /**
+   * 1.4.2: permanently remove a conversation and all of its associated data:
+   *  - session JSON record (and any .corrupt-* or deleted-sessions archive copies)
+   *  - session-exclusive workspace directory (files, downloads, uploaded attachments, .harness state)
+   *  - generated image / screenshot artifacts referenced by this session
+   *  - session-meta (pin/lock) and lastSessionId pointer
+   */
+  async deleteSession(id, { force = false } = {}) {
     const file = this.sessionFile(id);
     const key = id.toLowerCase();
-    await (this.sessionQueues.get(key) ?? Promise.resolve());
-    let session;
-    try { session = await this.getSession(key); }
-    catch (error) {
-      // 1.3.3: a file that cannot be read as a conversation can still be removed. Its bytes are
-      // moved to deleted-sessions unchanged, so nothing is lost by deleting it.
-      if (error?.status !== 422) throw error;
-      const raw = await fs.readFile(file);
-      await atomicWrite(path.join(this.deletedDir, `${key}.corrupt-${Date.now()}.json`), raw);
-      await fs.unlink(file);
-      if (this.lastSessionId === key) await this.forgetSession();
-      return;
+    if (!force && this.isSessionLocked(key)) {
+      throw new HttpError(423, '此会话已锁定，请先解锁后再删除。');
     }
-    const archived = { ...session, deletedAt: new Date().toISOString() };
-    await atomicWrite(path.join(this.deletedDir, `${key}.json`), JSON.stringify(archived, null, 2));
-    await fs.unlink(file);
+    await (this.sessionQueues.get(key) ?? Promise.resolve());
+    let session = null;
+    try {
+      session = await this.getSession(key);
+    } catch (error) {
+      if (error?.status !== 422) throw error;
+    }
+
+    // 1. Remove primary session JSON file
+    await fs.unlink(file).catch(error => {
+      if (error?.code === 'ENOENT') throw new HttpError(404, '会话不存在。');
+      throw error;
+    });
+
+    // 2. Remove any corrupt/archived copies in sessions/ and deleted-sessions/
+    for (const dir of [this.sessionDir, this.deletedDir]) {
+      const entries = await fs.readdir(dir).catch(() => []);
+      for (const name of entries) {
+        const lower = name.toLowerCase();
+        if (lower === `${key}.json` || lower.startsWith(`${key}.corrupt-`)) {
+          await fs.unlink(path.join(dir, name)).catch(() => {});
+        }
+      }
+    }
+
+    // 3. Remove session's dedicated workspace directory (including attachments/ and .harness/)
+    const workspaceCandidates = new Set([
+      this.sessionWorkspacePath(key),
+      this.sessionWorkspacePath(key, this.defaultWorkspace),
+    ]);
+    if (typeof session?.workspace === 'string' && path.isAbsolute(session.workspace)) {
+      workspaceCandidates.add(path.resolve(session.workspace));
+    }
+    for (const dir of workspaceCandidates) {
+      if (isSafeSessionWorkspaceDir(dir, key)) {
+        await fs.rm(dir, { recursive: true, force: true }).catch(() => {});
+      }
+    }
+
+    // 4. Remove artifacts belonging to this session (unless referenced by another existing session)
+    const artifactNames = extractArtifactNamesFromSession(session);
+    if (artifactNames.size > 0) {
+      const remainingFiles = await fs.readdir(this.sessionDir).catch(() => []);
+      for (const name of remainingFiles) {
+        if (!name.endsWith('.json') || name.slice(0, -5).toLowerCase() === key) continue;
+        const raw = await fs.readFile(path.join(this.sessionDir, name), 'utf8').catch(() => '');
+        if (!raw) continue;
+        for (const artName of [...artifactNames]) {
+          if (raw.toLowerCase().includes(artName)) artifactNames.delete(artName);
+        }
+        if (artifactNames.size === 0) break;
+      }
+      for (const artName of artifactNames) {
+        if (ARTIFACT_FILE_RE.test(artName)) {
+          await fs.unlink(path.join(this.artifactDir, artName)).catch(() => {});
+        }
+      }
+    }
+
+    // 5. Clear state pointer & metadata
     if (this.lastSessionId === key) await this.forgetSession();
+    if (key in this.sessionMeta) {
+      const nextMeta = { ...this.sessionMeta };
+      delete nextMeta[key];
+      await this.writeSessionMeta(nextMeta);
+    }
+    return { deleted: true, id: key, dataRemoved: true };
+  }
+
+  async deleteAllSessions({ includePinned = true, excludeIds = [] } = {}) {
+    const exclude = new Set((excludeIds ?? []).map(x => String(x).toLowerCase()));
+    const all = await this.listSessions();
+    const deletedIds = [];
+    const skippedLockedIds = [];
+    const skippedPinnedIds = [];
+    for (const item of all) {
+      if (exclude.has(item.id)) continue;
+      if (item.locked) {
+        skippedLockedIds.push(item.id);
+        continue;
+      }
+      if (!includePinned && item.pinned) {
+        skippedPinnedIds.push(item.id);
+        continue;
+      }
+      try {
+        await this.deleteSession(item.id);
+        deletedIds.push(item.id);
+      } catch { /* ignore individual race */ }
+    }
+    // Also purge any leftover files in deleted-sessions
+    const archived = await fs.readdir(this.deletedDir).catch(() => []);
+    for (const name of archived) {
+      await fs.unlink(path.join(this.deletedDir, name)).catch(() => {});
+    }
+    return {
+      deleted: true,
+      deletedIds,
+      skippedLockedIds,
+      skippedPinnedIds,
+      deletedCount: deletedIds.length,
+      skippedLockedCount: skippedLockedIds.length,
+    };
+  }
+
+  async searchSessions(query, { caseSensitive = false, liveSessions = new Map(), limit = 100 } = {}) {
+    const rawQuery = typeof query === 'string' ? query.trim() : '';
+    if (!rawQuery) return { query: '', results: [] };
+    const needle = caseSensitive ? rawQuery : rawQuery.toLowerCase();
+    const summaries = await this.listSessions();
+    const results = [];
+
+    const makeSnippet = (text, idx, len) => {
+      const start = Math.max(0, idx - 32);
+      const end = Math.min(text.length, idx + len + 48);
+      const prefix = start > 0 ? '…' : '';
+      const suffix = end < text.length ? '…' : '';
+      return (prefix + text.slice(start, end).replace(/\s+/g, ' ') + suffix).trim();
+    };
+
+    for (const summary of summaries) {
+      if (summary.corrupt) continue;
+      let session = liveSessions.get(summary.id) ?? null;
+      if (!session) {
+        try { session = await this.getSession(summary.id); }
+        catch { continue; }
+      }
+      const matches = [];
+      let matchCount = 0;
+
+      const titleText = typeof session.title === 'string' ? session.title : '';
+      if (titleText) {
+        const hay = caseSensitive ? titleText : titleText.toLowerCase();
+        const idx = hay.indexOf(needle);
+        if (idx !== -1) {
+          matchCount += 1;
+          matches.push({
+            messageId: null,
+            role: 'title',
+            occurrenceInMessage: 0,
+            snippet: titleText,
+          });
+        }
+      }
+
+      for (const msg of session.messages ?? []) {
+        if (!isObject(msg)) continue;
+        const combined = [
+          typeof msg.text === 'string' ? msg.text : '',
+          typeof msg.reasoning === 'string' ? msg.reasoning : '',
+        ].filter(Boolean).join('\n');
+        if (!combined) continue;
+        const hay = caseSensitive ? combined : combined.toLowerCase();
+        let from = 0;
+        let occ = 0;
+        while (from <= hay.length - needle.length) {
+          const idx = hay.indexOf(needle, from);
+          if (idx === -1) break;
+          matchCount += 1;
+          if (matches.length < 20) {
+            matches.push({
+              messageId: msg.id ?? null,
+              role: msg.role ?? 'assistant',
+              occurrenceInMessage: occ,
+              snippet: makeSnippet(combined, idx, rawQuery.length),
+            });
+          }
+          occ += 1;
+          from = idx + Math.max(1, needle.length);
+        }
+      }
+
+      if (matchCount > 0) {
+        results.push({
+          sessionId: summary.id,
+          title: summary.title,
+          pinned: Boolean(summary.pinned),
+          locked: Boolean(summary.locked),
+          updatedAt: summary.updatedAt,
+          matchCount,
+          matches,
+        });
+        if (results.length >= limit) break;
+      }
+    }
+
+    return { query: rawQuery, results };
   }
 
   async flush() {
     await this.settingsQueue;
     await this.stateQueue;
+    await this.metaQueue;
     await Promise.allSettled([...this.sessionQueues.values()]);
   }
 }

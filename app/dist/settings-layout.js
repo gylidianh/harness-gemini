@@ -35,7 +35,6 @@ export function createSettingsLayout(React) {
         ['工作台', '人工智能', '偏好设置'].map(group => {
           const items = visible.filter(item => item.group === group);
           return items.length ? h('div', { className: 'settings-nav-group', key: group },
-            h('div', { className: 'settings-nav-group-label' }, group),
             items.map(item => h(React.Fragment, { key: item.id },
               h('button', { type: 'button', className: `settings-nav-item${active === item.id ? ' active' : ''}`, onClick: () => onSelect(item.id), 'aria-current': active === item.id ? 'page' : undefined },
                 h(Icon, { type: item.icon }), h('span', { className: 'settings-nav-copy' }, item.label)),

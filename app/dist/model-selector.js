@@ -24,17 +24,22 @@ export function connectionModelPatch(mode, model, profileId) {
   return { activeProfileId: profileId, ...modelPatch(mode, model) };
 }
 
-export function modelPopoverPosition(rect, viewportWidth, viewportHeight) {
-  const availableWidth = Math.max(0, viewportWidth - 24);
+export function modelPopoverPosition(rect, viewportWidth, viewportHeight, bounds) {
+  const hasBounds = Boolean(bounds && Number.isFinite(bounds.left) && Number.isFinite(bounds.right) && (bounds.right - bounds.left) >= 280);
+  const minLeft = hasBounds ? Math.max(12, Math.round(bounds.left + 12)) : 12;
+  const maxRight = hasBounds ? Math.min(viewportWidth - 12, Math.round(bounds.right - 12)) : Math.max(12, viewportWidth - 12);
+  const availableWidth = Math.max(0, maxRight - minLeft);
   const minimumWidth = Math.min(320, availableWidth);
-  // Keep the left edge attached to the button; shift only below a usable width.
-  const width = Math.min(480, availableWidth, Math.max(minimumWidth, viewportWidth - rect.left - 12));
-  const above = Math.max(0, (rect.top ?? 0) - 20);
-  const below = Math.max(0, viewportHeight - rect.bottom - 20);
+  const width = hasBounds
+    ? Math.min(480, availableWidth)
+    : Math.min(480, availableWidth, Math.max(minimumWidth, maxRight - (rect.left ?? 0)));
+  const topInset = bounds && Number.isFinite(bounds.topInset) ? Math.max(0, bounds.topInset) : 0;
+  const above = Math.max(0, (rect.top ?? 0) - topInset - 20);
+  const below = Math.max(0, viewportHeight - (rect.bottom ?? 0) - 20);
   const openAbove = above > below;
   return {
     width,
-    left: Math.max(12, Math.min(rect.left, viewportWidth - width - 12)),
+    left: Math.max(minLeft, Math.min(rect.left ?? minLeft, maxRight - width)),
     ...(openAbove ? { bottom: viewportHeight - rect.top + 8 } : { top: rect.bottom + 8 }),
     maxHeight: Math.min(560, openAbove ? above : below),
   };
@@ -192,10 +197,16 @@ export function createHeaderModelSelector(React, api, createPortal) {
 
     useLayoutEffect(() => {
       if (!open) return;
+      const mainPanel = trigger.current?.closest('.main-panel');
       const place = () => {
         const rect = trigger.current?.getBoundingClientRect();
         if (!rect) return;
-        setPosition(modelPopoverPosition(rect, window.innerWidth, window.innerHeight));
+        const mainRect = mainPanel?.getBoundingClientRect();
+        const topInset = document.getElementById('hg-titlebar')?.getBoundingClientRect()?.bottom || 0;
+        const bounds = mainRect
+          ? { left: mainRect.left, right: mainRect.right, topInset }
+          : { left: 0, right: window.innerWidth, topInset };
+        setPosition(modelPopoverPosition(rect, window.innerWidth, window.innerHeight, bounds));
       };
       const outside = event => {
         if (!root.current?.contains(event.target) && !popup.current?.contains(event.target)) setOpen(false);
@@ -206,6 +217,7 @@ export function createHeaderModelSelector(React, api, createPortal) {
       window.addEventListener('scroll', place, true);
       const observer = new ResizeObserver(place);
       observer.observe(trigger.current);
+      if (mainPanel) observer.observe(mainPanel);
       document.addEventListener('pointerdown', outside);
       document.addEventListener('focusin', outside);
       return () => {

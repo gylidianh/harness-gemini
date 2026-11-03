@@ -8,3 +8,11 @@
     height: calc(100dvh - var(--hg-top-inset, 0px) - 24px);
   }
 }
+.app-shell[data-skin=luxe-noir] .skill-menu,
+.app-shell[data-skin=luxe-noir] .permission-menu,
+.app-shell[data-skin=luxe-noir] .reasoning-menu,
+.app-shell[data-skin=luxe-noir] .browser-popover,
+html[data-skin=luxe-noir] .context-panel {
+  background: #181612;
+  border-color: var(--line-strong);
+}

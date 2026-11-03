@@ -5,7 +5,7 @@ Windows 桌面 AI 工作台，在一个窗口中聊天、编程、生图和浏�
 [![版本](https://img.shields.io/github/v/release/gylidianh/harness-gemini)](https://github.com/gylidianh/harness-gemini/releases/latest)
 ![Windows x64](https://img.shields.io/badge/Windows-10%20%2F%2011%20x64-0078d4)
 
-**[下载 1.3.10 安装包](https://github.com/gylidianh/harness-gemini/releases/download/v1.3.10/Harness-Gemini-1.3.10-win-x64.exe)** · **[浏览源码](app/)** · [版本说明](CHANGELOG.md) · [使用指南](docs/usage.md) · [开发说明](docs/development.md) · [常见问题](docs/faq.md)
+**[下载 1.4.4 安装包](https://github.com/gylidianh/harness-gemini/releases/download/v1.4.4/Harness-Gemini-1.4.4-win-x64.exe)** · **[浏览源码](app/)** · [版本说明](CHANGELOG.md) · [使用指南](docs/usage.md) · [开发说明](docs/development.md) · [常见问题](docs/faq.md)
 
 ![Harness Gemini 1.3.10 主界面](docs/images/home-1.3.10.png)
 
@@ -16,7 +16,7 @@ Windows 桌面 AI 工作台，在一个窗口中聊天、编程、生图和浏�
 | 模型连接 | 支持 OpenAI Chat Completions、Anthropic Messages、OpenAI Responses 协议；可保存和切换多个连接 |
 | 聊天、编程、生图 | 为不同模式配置模型，在输入框工具栏中切换 |
 | 模型与思考等级 | 从工具栏选择模型；推理参数是否生效取决于模型和接口支持 |
-| 内置浏览器 | 多标签页、网页读取与交互，也可打开本地页面 |
+| 内置浏览器 | 多标签页、网页读取与交互、文件下载与进度显示，也可打开本地页面 |
 | 技能与子代理 | 管理外置技能，查看任务清单和子任务进度 |
 | 界面与上下文 | 五种主题、Markdown 与公式、附件、上下文占用和压缩设置 |
 
@@ -31,7 +31,7 @@ Windows 桌面 AI 工作台，在一个窗口中聊天、编程、生图和浏�
 
 详细步骤、文件校验和数据位置见 [使用指南](docs/usage.md)。
 
-## 1.3.10 界面
+## 界面
 
 输入工具栏集中显示附件、模式、权限、模型、思考等级和发送按钮；设置使用左侧分类、右侧内容的布局。
 
@@ -49,7 +49,7 @@ Windows 桌面 AI 工作台，在一个窗口中聊天、编程、生图和浏�
 
 </details>
 
-以上截图来自独立演示环境，连接和模型名称为示例，不包含真实密钥、聊天记录或用户文件。
+以上截图拍摄于 1.3.10，来自独立演示环境，连接和模型名称为示例，不包含真实密钥、聊天记录或用户文件。
 
 ## 数据与权限
 
@@ -74,7 +74,7 @@ Windows 桌面 AI 工作台，在一个窗口中聊天、编程、生图和浏�
 
 ## 源码范围
 
-[app/](app/) 包含与已发布 1.3.10 对应的 [桌面端](app/desktop/)、[服务端](app/server/)、[共享模块](app/shared/) 和 [新增 UI 模块与前端产物](app/dist/)，可在 GitHub 上直接点开查看。`SOURCE-MANIFEST.json` 记录这些文件在发布包中的校验值。
+[app/](app/) 包含与已发布 1.4.4 对应的 [桌面端](app/desktop/)、[服务端](app/server/)、[共享模块](app/shared/) 和 [新增 UI 模块与前端产物](app/dist/)，可在 GitHub 上直接点开查看。`SOURCE-MANIFEST.json` 记录这些文件在发布包中的校验值。
 
 基础界面的原始 React 工程目前不在仓库中，不能从这里重新构建该前端 bundle；现有前端产物可直接运行并随桌面程序打包。详见 [开发说明](docs/development.md)。
 

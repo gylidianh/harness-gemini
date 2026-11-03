@@ -55,7 +55,11 @@ export function normalizeBrowserPayload(action, payload) {
   if (action === 'screenshot') return normalizeScreenshotPayload(result);
   if (action === 'open') {
     const title = cleanText(result.title, MAX_TITLE, { allowEmpty: true });
-    return { url: cleanUrl(result.url), title: title ?? '', loading: result.loading === true };
+    const out = { url: cleanUrl(result.url), title: title ?? '', loading: result.loading === true };
+    if (typeof result.visible === 'boolean') out.visible = result.visible;
+    const reason = cleanText(result.hiddenReason, 200, { allowEmpty: true });
+    if (reason) out.hiddenReason = reason;
+    return out;
   }
   const text = cleanText(result.text, MAX_BROWSER_TEXT, { allowEmpty: true });
   if (text === null) throw new HttpError(502, '内置浏览器返回的页面文字格式不正确。');
@@ -103,6 +107,14 @@ export function normalizeSnapshotPayload(result) {
     if (element.disabled === true) item.disabled = true;
     if (element.checked === true) item.checked = true;
     if (element.inViewport === false) item.inViewport = false;
+    const context = clipText(element.context, 80);
+    if (context) item.context = context;
+    if (element.modal === true) item.modal = true;
+    if (element.frame === true) item.frame = true;
+    if (element.shadow === true) item.shadow = true;
+    const nth = boundedInteger(element.nth, 1, 999);
+    const duplicates = boundedInteger(element.duplicates, 2, 999);
+    if (nth && duplicates) { item.nth = nth; item.duplicates = duplicates; }
     const type = cleanText(element.type, 20, { allowEmpty: true });
     if (type) item.type = type;
     const value = cleanText(element.value, 120, { allowEmpty: true });
@@ -120,7 +132,43 @@ export function normalizeSnapshotPayload(result) {
     url: cleanUrl(result.url), title: cleanText(result.title, MAX_TITLE, { allowEmpty: true }) ?? '',
     viewport: { width: numbers[0], height: numbers[1], scrollX: numbers[2], scrollY: numbers[3], scrollWidth: numbers[4], scrollHeight: numbers[5] },
     elements, truncated: result.truncated === true,
+    ...pageStatus(result),
+    ...(isObject(result.scroll) ? { scroll: {
+      container: clipText(typeof result.scroll.container === 'string' ? result.scroll.container : 'element', 80),
+      scrollTop: boundedInteger(result.scroll.scrollTop, -10_000_000, 10_000_000) ?? 0,
+      scrollHeight: boundedInteger(result.scroll.scrollHeight, 0, 10_000_000) ?? 0,
+      clientHeight: boundedInteger(result.scroll.clientHeight, 0, 10_000_000) ?? 0,
+    } } : {}),
+    ...(isObject(result.modal) ? { modal: { name: clipText(result.modal.name, 120), elements: boundedInteger(result.modal.elements, 0, 1000) ?? 0 } } : {}),
   };
+}
+
+function targetInfo(value) {
+  if (!isObject(value)) return null;
+  const out = { role: clipText(value.role, 40), name: clipText(value.name, 120) };
+  if (typeof value.ref === 'string' && /^h[1-9][0-9]{0,3}$/.test(value.ref)) out.ref = value.ref;
+  const context = clipText(value.context, 80);
+  if (context) out.context = context;
+  if (typeof value.tag === 'string') out.tag = clipText(value.tag, 20);
+  if (value.editable === true) out.editable = true;
+  return out;
+}
+
+/** Inputs typed but not yet submitted, and whether the panel is on screen. */
+function pageStatus(result) {
+  const out = {};
+  if (Array.isArray(result.pendingInputs)) {
+    out.pendingInputs = result.pendingInputs.slice(0, 10).filter(isObject).map(item => {
+      const entry = targetInfo(item) ?? {};
+      if (item.hidden === true) entry.valueHidden = true;
+      else entry.value = clipText(item.value, 200);
+      return entry;
+    });
+  }
+  if (typeof result.visible === 'boolean') out.visible = result.visible;
+  const reason = cleanText(result.hiddenReason, 200, { allowEmpty: true });
+  if (reason) out.hiddenReason = reason;
+  return out;
 }
 
 /**
@@ -147,9 +195,7 @@ export function normalizeActPayload(result) {
   const action = cleanText(result.action, 20, { allowEmpty: true });
   if (!action) throw new HttpError(502, '内置浏览器没有返回执行的动作。');
   const keys = Array.isArray(result.keys) ? result.keys.slice(0, 4).map(key => cleanText(key, 40, { allowEmpty: true })).filter(Boolean) : [];
-  const target = isObject(result.target)
-    ? { role: cleanText(result.target.role, 40, { allowEmpty: true }) ?? '', name: cleanText(result.target.name, 120, { allowEmpty: true }) ?? '' }
-    : null;
+  const target = targetInfo(result.target);
   const optionalInteger = (value, maximum) => {
     const number = boundedInteger(value, -maximum, maximum);
     return number === null ? undefined : number;
@@ -165,6 +211,16 @@ export function normalizeActPayload(result) {
     amount: optionalInteger(result.amount, 20_000),
     scrollY: optionalInteger(result.scrollY, 10_000_000),
     scrollHeight: optionalInteger(result.scrollHeight, 10_000_000),
+    scrollBefore: optionalInteger(result.scrollBefore, 10_000_000),
+    scrolledBy: optionalInteger(result.scrolledBy, 10_000_000),
+    scrollContainer: cleanText(result.scrollContainer, 120, { allowEmpty: true }) ?? '',
+    atTop: result.atTop === true, atBottom: result.atBottom === true,
+    focusedElement: targetInfo(result.focusedElement),
+    hitVerified: result.hitVerified === true,
+    valueAfter: typeof result.valueAfter === 'string' ? clipText(result.valueAfter, 200) : undefined,
+    valueMatches: typeof result.valueMatches === 'boolean' ? result.valueMatches : undefined,
+    valueHidden: result.valueHidden === true,
+    ...pageStatus(result),
   };
 }
 

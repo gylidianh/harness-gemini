@@ -1,5 +1,18 @@
 # 更新记录
 
+## 1.4.4 · 2026-11-03
+
+[版本说明与下载](https://github.com/gylidianh/harness-gemini/releases/tag/v1.4.4)
+
+- 修复内置浏览器“点下载没反应”：取消单下载限制（最多 6 个并行），不再依赖可能被挡住的系统保存对话框，文件直接保存到“下载”文件夹并自动避免重名。
+- 新增下载进度面板：进度、大小、速度、状态，支持取消、打开所在文件夹、清除已完成；颜色跟随皮肤。
+- 下载被拒绝时会显示原因；关闭标签页不再中断下载。
+- 内置浏览器自动操作更可靠：自动展开面板、同名元素按所在行区分、点击前遮挡检测、支持弹窗 / shadow DOM / iframe。
+- 新增 `Ctrl+F` 正文搜索（含跨对话搜索与跳转），会话置顶、锁定与一键删除。
+- 修复模型选择器、权限菜单在右侧面板展开时越界或被裁切，统一滚动条样式。
+
+安装包：`Harness-Gemini-1.4.4-win-x64.exe`，Windows 10 / 11 x64。
+
 ## 1.3.10 · 2026-11-01
 
 [版本说明与下载](https://github.com/gylidianh/harness-gemini/releases/tag/v1.3.10)
@@ -14,4 +27,4 @@
 
 安装包：`Harness-Gemini-1.3.10-win-x64.exe`，Windows 10 / 11 x64。
 
-历史发行包仍可在 [全部 Releases](https://github.com/gylidianh/harness-gemini/releases) 中查看，用于版本对照和回退。首页与使用文档以 1.3.10 为准。
+历史发行包仍可在 [全部 Releases](https://github.com/gylidianh/harness-gemini/releases) 中查看，用于版本对照和回退。首页与使用文档以 1.4.4 为准。

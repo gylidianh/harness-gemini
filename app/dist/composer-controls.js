@@ -1,8 +1,38 @@
-export function reasoningMenuPosition(trigger, container, viewportWidth, viewportHeight) {
+function resolveComposerMenuBounds(element, viewportWidth, margin = 12) {
+  const mainRect = element?.closest?.('.main-panel')?.getBoundingClientRect?.();
+  const topInset = typeof document !== 'undefined' ? (document.getElementById('hg-titlebar')?.getBoundingClientRect()?.bottom || 0) : 0;
+  const hasMain = Boolean(mainRect && Number.isFinite(mainRect.left) && Number.isFinite(mainRect.right) && (mainRect.right - mainRect.left) >= 260);
+  const minX = hasMain ? Math.max(margin, Math.round(mainRect.left + margin)) : margin;
+  const maxX = hasMain ? Math.min(viewportWidth - margin, Math.round(mainRect.right - margin)) : Math.max(margin, viewportWidth - margin);
+  return { minX, maxX: Math.max(minX, maxX), topInset };
+}
+
+export function reasoningMenuPosition(trigger, container, viewportWidth, viewportHeight, bounds) {
   const margin = 12, gap = 8;
-  const width = Math.min(248, viewportWidth - margin * 2);
-  const left = Math.max(margin, Math.min(trigger.right - width, viewportWidth - margin - width));
-  const above = trigger.top - margin - gap;
+  const minX = bounds && Number.isFinite(bounds.minX) ? bounds.minX : margin;
+  const maxX = bounds && Number.isFinite(bounds.maxX) ? bounds.maxX : Math.max(margin, viewportWidth - margin);
+  const topInset = bounds && Number.isFinite(bounds.topInset) ? bounds.topInset : 0;
+  const width = Math.min(248, Math.max(0, maxX - minX));
+  const left = Math.max(minX, Math.min(trigger.right - width, maxX - width));
+  const above = trigger.top - topInset - margin - gap;
+  const below = viewportHeight - trigger.bottom - margin - gap;
+  const upward = above >= below;
+  return {
+    width: `${width}px`, left: `${left - container.left}px`, right: 'auto',
+    top: upward ? 'auto' : `${trigger.bottom + gap - container.top}px`,
+    bottom: upward ? `${container.bottom - trigger.top + gap}px` : 'auto',
+    maxHeight: `${Math.max(0, Math.min(420, upward ? above : below))}px`,
+  };
+}
+
+export function permissionMenuPosition(trigger, container, viewportWidth, viewportHeight, bounds) {
+  const margin = 12, gap = 8;
+  const minX = bounds && Number.isFinite(bounds.minX) ? bounds.minX : margin;
+  const maxX = bounds && Number.isFinite(bounds.maxX) ? bounds.maxX : Math.max(margin, viewportWidth - margin);
+  const topInset = bounds && Number.isFinite(bounds.topInset) ? bounds.topInset : 0;
+  const width = Math.min(360, Math.max(0, maxX - minX));
+  const left = Math.max(minX, Math.min(trigger.left, maxX - width));
+  const above = trigger.top - topInset - margin - gap;
   const below = viewportHeight - trigger.bottom - margin - gap;
   const upward = above >= below;
   return {
@@ -16,16 +46,45 @@ export function reasoningMenuPosition(trigger, container, viewportWidth, viewpor
 export function useReasoningMenuPosition(React, open, trigger, container, menu) {
   React.useLayoutEffect(() => {
     if (!open) return;
+    const mainPanel = container.current?.closest?.('.main-panel');
     const update = () => {
       if (!trigger.current || !container.current || !menu.current) return;
+      const bounds = resolveComposerMenuBounds(container.current, window.innerWidth, 12);
       Object.assign(menu.current.style, reasoningMenuPosition(
         trigger.current.getBoundingClientRect(), container.current.getBoundingClientRect(),
-        window.innerWidth, window.innerHeight,
+        window.innerWidth, window.innerHeight, bounds,
       ));
     };
     update();
     const observer = new ResizeObserver(update);
     observer.observe(container.current);
+    if (mainPanel) observer.observe(mainPanel);
+    window.addEventListener('resize', update);
+    window.addEventListener('scroll', update, true);
+    return () => {
+      observer.disconnect();
+      window.removeEventListener('resize', update);
+      window.removeEventListener('scroll', update, true);
+    };
+  }, [open, trigger, container, menu]);
+}
+
+export function usePermissionMenuPosition(React, open, trigger, container, menu) {
+  React.useLayoutEffect(() => {
+    if (!open) return;
+    const mainPanel = container.current?.closest?.('.main-panel');
+    const update = () => {
+      if (!trigger.current || !container.current || !menu.current) return;
+      const bounds = resolveComposerMenuBounds(container.current, window.innerWidth, 12);
+      Object.assign(menu.current.style, permissionMenuPosition(
+        trigger.current.getBoundingClientRect(), container.current.getBoundingClientRect(),
+        window.innerWidth, window.innerHeight, bounds,
+      ));
+    };
+    update();
+    const observer = new ResizeObserver(update);
+    observer.observe(container.current);
+    if (mainPanel) observer.observe(mainPanel);
     window.addEventListener('resize', update);
     window.addEventListener('scroll', update, true);
     return () => {
@@ -49,9 +108,10 @@ export function createComposerModePicker(React, createPortal) {
       if (!open) return;
       const place = () => {
         const rect = trigger.current.getBoundingClientRect();
-        const width = Math.min(232, innerWidth - 24);
-        const above = rect.top - 20, below = innerHeight - rect.bottom - 20;
-        setPosition({ width, left: Math.max(12, Math.min(rect.left, innerWidth - width - 12)),
+        const { minX, maxX, topInset } = resolveComposerMenuBounds(trigger.current, innerWidth, 12);
+        const width = Math.min(232, Math.max(0, maxX - minX));
+        const above = rect.top - topInset - 20, below = innerHeight - rect.bottom - 20;
+        setPosition({ width, left: Math.max(minX, Math.min(rect.left, maxX - width)),
           ...(above >= below ? { bottom: innerHeight - rect.top + 8 } : { top: rect.bottom + 8 }),
           maxHeight: Math.max(0, Math.min(340, Math.max(above, below))) });
       };

@@ -135,7 +135,7 @@ function security(allowedOrigins) {
     res.setHeader('X-Frame-Options', 'DENY');
     res.setHeader('Content-Security-Policy', "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' blob: data: https: http:; connect-src 'self'; object-src 'none'; base-uri 'self'; frame-ancestors 'none'");
     if (req.method === 'OPTIONS') {
-      res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
+      res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, PATCH, DELETE, OPTIONS');
       res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
       return res.status(204).end();
     }
@@ -1313,7 +1313,7 @@ export async function createApp({ dataDir = path.join(PROJECT_ROOT, 'data'), def
       run.controller.abort();
       res.off('close', onDisconnect);
       try {
-        if (sse) await sse.send('done', { session: run.session, ...(completionInfo ? { completion: completionInfo } : {}) });
+        if (sse) await sse.send('done', { session: store.withSessionMeta(run.session), ...(completionInfo ? { completion: completionInfo } : {}) });
       } finally {
         sse?.close();
         // Notification failures must never change the result or keep the run alive.
@@ -1386,12 +1386,55 @@ export async function createApp({ dataDir = path.join(PROJECT_ROOT, 'data'), def
     res.json({ opened: true, directory: externalSkills.directory });
   });
   app.get('/api/sessions', async (req, res) => res.json(await store.listSessions()));
+  app.get('/api/sessions/search', async (req, res) => {
+    const q = typeof req.query.q === 'string' ? req.query.q.slice(0, 500) : '';
+    const caseSensitive = req.query.caseSensitive === '1' || req.query.caseSensitive === 'true';
+    const liveSessions = new Map();
+    for (const [id, run] of runs.entries()) {
+      if (run?.session) liveSessions.set(id, run.session);
+    }
+    res.json(await store.searchSessions(q, { caseSensitive, liveSessions }));
+  });
+  app.post('/api/sessions/bulk-delete', async (req, res) => {
+    const body = isObject(req.body) ? req.body : {};
+    const includePinned = body.includePinned !== false;
+    const all = await store.listSessions();
+    const stopPromises = [];
+    for (const item of all) {
+      if (item.locked || (!includePinned && item.pinned)) continue;
+      const run = runs.get(item.id);
+      if (run) {
+        run.cancelSource = 'stop';
+        run.controller.abort();
+        stopPromises.push(Promise.race([
+          run.promise?.catch(() => {}),
+          new Promise(resolve => { const timer = setTimeout(resolve, STOP_ACK_TIMEOUT_MS); timer.unref?.(); }),
+        ]));
+      }
+    }
+    if (stopPromises.length) await Promise.allSettled(stopPromises);
+    res.json(await store.deleteAllSessions({ includePinned }));
+  });
   app.post('/api/sessions', async (req, res) => {
     const body = req.body ?? {}; requireObject(body);
     const title = body.title === undefined ? '新对话' : boundedString(body.title, '会话标题', { max: 120 }).trim();
     res.status(201).json(await store.createSession(title));
   });
-  app.get('/api/sessions/:id', async (req, res) => res.json(runs.get(req.params.id)?.session ?? await store.getSession(req.params.id)));
+  const handleUpdateSessionFlags = async (req, res) => {
+    const body = requireObject(req.body);
+    const updated = await store.updateSessionFlags(req.params.id, body);
+    const live = runs.get(req.params.id)?.session;
+    if (live) {
+      live.pinned = updated.pinned;
+      live.pinnedAt = updated.pinnedAt;
+      live.locked = updated.locked;
+      live.lockedAt = updated.lockedAt;
+    }
+    res.json(updated);
+  };
+  app.post('/api/sessions/:id/flags', handleUpdateSessionFlags);
+  app.patch('/api/sessions/:id', handleUpdateSessionFlags);
+  app.get('/api/sessions/:id', async (req, res) => res.json(store.withSessionMeta(runs.get(req.params.id)?.session ?? await store.getSession(req.params.id))));
   // The context panel asks for the occupancy of the conversation it is showing. An active run
   // answers from its live tracker; a restored one reports the last stored value and states that
   // it is a stored figure rather than a live measurement.
@@ -1429,8 +1472,9 @@ export async function createApp({ dataDir = path.join(PROJECT_ROOT, 'data'), def
     res.json({ lastSessionId: req.params.id });
   });
   app.delete('/api/sessions/:id', async (req, res) => {
-    if (runs.has(req.params.id) || startingRuns.has(req.params.id)) throw new HttpError(409, '请先停止此会话，再移到已删除会话。');
-    await store.deleteSession(req.params.id); res.json({ deleted: true });
+    if (store.isSessionLocked(req.params.id)) throw new HttpError(423, '此会话已锁定，请先解锁后再删除。');
+    if (runs.has(req.params.id) || startingRuns.has(req.params.id)) throw new HttpError(409, '请先停止此会话，再删除。');
+    res.json(await store.deleteSession(req.params.id));
   });
   /**
    * One attachment is uploaded before the message that uses it. The bytes are validated and

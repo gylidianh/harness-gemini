@@ -1,6 +1,6 @@
 {
   "name": "local-harness",
-  "version": "1.3.10",
+  "version": "1.4.4",
   "private": true,
   "type": "module",
   "main": "desktop/main.mjs",

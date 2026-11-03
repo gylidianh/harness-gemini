@@ -101,6 +101,14 @@ function screenshotResult(payload) {
 }
 
 /** The interactive surface the model acts on: refs, roles, names, rectangles. */
+/** 1.4.1-browserfix: bounded plain-data copy for the new optional fields. */
+function jsonCopy(value) {
+  try {
+    const text = JSON.stringify(value);
+    return text && text.length <= 20_000 ? JSON.parse(text) : null;
+  } catch { return null; }
+}
+
 function snapshotResult(payload) {
   if (!payload || typeof payload !== 'object') return null;
   if (typeof payload.url !== 'string' || payload.url.length > 4_096) return null;
@@ -118,6 +126,13 @@ function snapshotResult(payload) {
     if (typeof element.role !== 'string' || element.role.length > 40 || typeof element.tag !== 'string' || element.tag.length > 20 || typeof element.name !== 'string' || element.name.length > 120) return null;
     if (!['x', 'y', 'width', 'height'].every(key => Number.isInteger(element[key]) && Math.abs(element[key]) <= 200_000)) return null;
     elements.push(Object.freeze({
+      ...(typeof element.context === 'string' && element.context ? { context: element.context.slice(0, 80) } : {}),
+      ...(element.modal === true ? { modal: true } : {}),
+      ...(element.frame === true ? { frame: true } : {}),
+      ...(element.shadow === true ? { shadow: true } : {}),
+      ...(element.inViewport === false ? { inViewport: false } : {}),
+      ...(Number.isInteger(element.nth) ? { nth: element.nth } : {}),
+      ...(Number.isInteger(element.duplicates) ? { duplicates: element.duplicates } : {}),
       ref: element.ref, role: element.role, tag: element.tag, name: element.name,
       x: element.x, y: element.y, width: element.width, height: element.height,
       disabled: element.disabled === true, checked: element.checked === true,
@@ -131,6 +146,7 @@ function snapshotResult(payload) {
     }));
   }
   return Object.freeze({
+    extra: jsonCopy({ scroll: payload.scroll ?? null, modal: payload.modal ?? null, pendingInputs: payload.pendingInputs ?? [], visible: payload.visible === true, hiddenReason: typeof payload.hiddenReason === 'string' ? payload.hiddenReason.slice(0, 200) : '' }),
     url: payload.url, title: payload.title, truncated: payload.truncated, error: payload.error,
     viewport: Object.freeze({ width: viewport.width, height: viewport.height, scrollX: viewport.scrollX, scrollY: viewport.scrollY, scrollWidth: viewport.scrollWidth, scrollHeight: viewport.scrollHeight }),
     elements: Object.freeze(elements),
@@ -391,6 +407,267 @@ ipcRenderer.on(OPEN_SESSION_CHANNEL, (_event, payload) => {
   }
 });
 
+const BROWSER_DOWNLOADS_CHANNEL = 'harness:browser-downloads';
+const BROWSER_DOWNLOAD_COMMAND_CHANNEL = 'harness:browser-download-command';
+const downloadSubscribers = new Set();
+
+// ---- 1.4.4: download progress panel ----------------------------------------
+// The built-in browser's page area is a native view that paints above the page,
+// so this panel is anchored just OUTSIDE the page canvas (to its left) where it
+// cannot be covered. It is built here rather than in the bundled UI so a small
+// patch stays readable.
+const DOWNLOAD_PANEL_ID = 'hg-downloads';
+let downloadPanel;
+let lastDownloads = null;
+
+function downloadBytes(value) {
+  const size = Number(value);
+  if (!Number.isFinite(size) || size <= 0) return '0 B';
+  if (size < 1024) return `${Math.round(size)} B`;
+  if (size < 1024 * 1024) return `${(size / 1024).toFixed(1)} KB`;
+  if (size < 1024 * 1024 * 1024) return `${(size / (1024 * 1024)).toFixed(1)} MB`;
+  return `${(size / (1024 * 1024 * 1024)).toFixed(2)} GB`;
+}
+
+function downloadSpeed(value) {
+  const speed = Number(value);
+  if (!Number.isFinite(speed) || speed <= 0) return '';
+  return `${downloadBytes(speed)}/s`;
+}
+
+function downloadStateText(record) {
+  if (record.state === 'completed') return '已完成';
+  if (record.state === 'cancelled') return '已取消';
+  if (record.state === 'interrupted') return '已中断';
+  return '';
+}
+
+function ensureDownloadPanel() {
+  if (downloadPanel && downloadPanel.isConnected) return downloadPanel;
+  if (!document.body) return null;
+  const root = document.createElement('section');
+  root.id = DOWNLOAD_PANEL_ID;
+  root.className = 'hg-dl';
+  root.setAttribute('aria-label', '下载');
+  root.hidden = true;
+  const style = document.createElement('style');
+  style.textContent = [
+    '#hg-downloads{position:fixed;z-index:2147483000;width:320px;max-width:calc(100vw - 32px);box-sizing:border-box;display:flex;flex-direction:column;',
+    'background:var(--surface-raised,#ffffff);color:var(--text,#202124);border:1px solid var(--line-strong,rgba(0,0,0,.16));border-radius:12px;',
+    'box-shadow:var(--shadow-4,0 12px 32px rgba(0,0,0,.18));font:12px/1.45 system-ui,-apple-system,"Segoe UI","Microsoft YaHei",sans-serif;overflow:hidden;color-scheme:inherit}',
+    '#hg-downloads[hidden]{display:none}',
+    '#hg-downloads .hg-dl-head{display:flex;align-items:center;gap:8px;padding:8px 10px;border-bottom:1px solid var(--line,rgba(0,0,0,.1));font-weight:600;color:var(--text,#202124);flex:none}',
+    '#hg-downloads .hg-dl-head .hg-dl-count{font-weight:500;color:var(--muted,#5f6368)}',
+    '#hg-downloads .hg-dl-head .hg-dl-spacer{flex:1}',
+    '#hg-downloads .hg-dl-head button{border:0;background:transparent;color:var(--accent,#1a73e8);cursor:pointer;font:inherit;font-weight:500;padding:2px 6px;border-radius:6px}',
+    '#hg-downloads .hg-dl-head button:hover{background:var(--hover-strong,rgba(127,127,127,.14))}',
+    '#hg-downloads .hg-dl-list{flex:1 1 auto;min-height:0;overflow:auto;margin:0;padding:0;list-style:none}',
+    '#hg-downloads .hg-dl-item{padding:8px 10px;border-top:1px solid var(--line,rgba(0,0,0,.07))}',
+    '#hg-downloads .hg-dl-item:first-child{border-top:0}',
+    '#hg-downloads .hg-dl-name{font-weight:600;color:var(--text,#202124);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}',
+    '#hg-downloads .hg-dl-bar{position:relative;height:4px;margin:6px 0 4px;border-radius:2px;background:var(--hover-strong,rgba(127,127,127,.22));overflow:hidden}',
+    '#hg-downloads .hg-dl-bar i{position:absolute;inset:0 auto 0 0;background:var(--accent,#1a73e8);border-radius:2px;transition:width .2s linear}',
+    '#hg-downloads .hg-dl-bar.done i{background:var(--green,#188038)}',
+    '#hg-downloads .hg-dl-bar.indeterminate i{width:35%!important;animation:hg-dl-slide 1.1s ease-in-out infinite}',
+    '@keyframes hg-dl-slide{0%{left:-35%}100%{left:100%}}',
+    '#hg-downloads .hg-dl-meta{color:var(--muted,#5f6368);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}',
+    '#hg-downloads .hg-dl-err{color:var(--red,#d93025);margin-top:2px}',
+    '#hg-downloads .hg-dl-actions{display:flex;gap:6px;margin-top:6px}',
+    '#hg-downloads .hg-dl-actions button{border:1px solid var(--line-strong,rgba(0,0,0,.16));background:var(--surface,transparent);color:var(--text,#202124);',
+    'border-radius:7px;padding:3px 10px;font:inherit;cursor:pointer}',
+    '#hg-downloads .hg-dl-actions button:hover{background:var(--accent-tonal,rgba(127,127,127,.14));border-color:var(--accent,#1a73e8)}',
+    '#hg-downloads .hg-dl-notice{padding:6px 10px;background:var(--red-tonal,rgba(221,51,51,.1));color:var(--red,#c22);border-top:1px solid var(--danger-border,rgba(221,51,51,.2));flex:none}',
+  ].join('');
+  root.append(style);
+  document.body.appendChild(root);
+  downloadPanel = root;
+  root.addEventListener('click', event => {
+    const button = event.target instanceof Element ? event.target.closest('button[data-dl-action]') : null;
+    if (!button) return;
+    event.preventDefault();
+    event.stopPropagation();
+    const action = button.dataset.dlAction;
+    const id = button.dataset.dlId || '';
+    if (action === 'hide') { root.hidden = true; return; }
+    if (!['clear', 'cancel', 'reveal'].includes(action)) return;
+    button.disabled = true;
+    ipcRenderer.invoke(BROWSER_DOWNLOAD_COMMAND_CHANNEL, action, id.slice(0, 32))
+      .then(result => { if (result && result.ok === false) showDownloadNotice(result.error || '操作没有完成。'); })
+      .catch(() => showDownloadNotice('操作没有完成，请重试。'))
+      .finally(() => { button.disabled = false; });
+  });
+  return root;
+}
+
+function showDownloadNotice(message) {
+  const root = ensureDownloadPanel();
+  if (!root) return;
+  root.hidden = false;
+  const notice = document.createElement('div');
+  notice.className = 'hg-dl-notice';
+  notice.textContent = String(message || '').slice(0, 200);
+  root.appendChild(notice);
+  setTimeout(() => { notice.remove(); }, 6_000);
+  placeDownloadPanel();
+}
+function placeDownloadPanel() {
+  const root = ensureDownloadPanel();
+  if (!root || root.hidden) return;
+  const canvas = document.querySelector('#browser-panel .browser-canvas');
+  const rect = canvas?.getBoundingClientRect();
+  const width = window.innerWidth || 1_200;
+  if (rect && rect.width > 80 && rect.height > 80) {
+    root.style.left = 'auto';
+    root.style.right = `${Math.max(12, Math.round(width - rect.left + 12))}px`;
+    root.style.top = `${Math.max(56, Math.round(rect.top))}px`;
+    root.style.maxHeight = `${Math.max(160, Math.round(rect.height - 24))}px`;
+  } else {
+    root.style.left = 'auto';
+    root.style.right = '16px';
+    root.style.top = '72px';
+    root.style.maxHeight = '60vh';
+  }
+}
+
+function renderDownloads(payload) {
+  const list = Array.isArray(payload?.downloads) ? payload.downloads : [];
+  const root = ensureDownloadPanel();
+  if (!root) return;
+  const active = list.filter(record => record.state === 'progressing');
+  if (!list.length && !payload?.notice) { root.hidden = true; return; }
+  root.hidden = false;
+  const head = root.querySelector('.hg-dl-head') || root.appendChild(Object.assign(document.createElement('div'), { className: 'hg-dl-head' }));
+  const activeCount = active.length;
+  head.textContent = '';
+  const title = document.createElement('span');
+  title.textContent = activeCount ? `正在下载 ${activeCount} 项` : '下载';
+  const count = document.createElement('span');
+  count.className = 'hg-dl-count';
+  count.textContent = list.length > activeCount ? `共 ${list.length} 项` : '';
+  const clear = document.createElement('button');
+  clear.type = 'button';
+  clear.dataset.dlAction = 'clear';
+  clear.textContent = '清除已完成';
+  clear.hidden = list.length <= activeCount;
+  const hide = document.createElement('button');
+  hide.type = 'button';
+  hide.dataset.dlAction = 'hide';
+  hide.textContent = '收起';
+  const spacer = document.createElement('span');
+  spacer.className = 'hg-dl-spacer';
+  head.append(title, count, spacer, clear, hide);
+  let body = root.querySelector('.hg-dl-list');
+  if (!body) { body = document.createElement('ul'); body.className = 'hg-dl-list'; root.appendChild(body); }
+  body.textContent = '';
+  for (const record of list.slice().reverse()) {
+    const item = document.createElement('li');
+    item.className = 'hg-dl-item';
+    const name = document.createElement('div');
+    name.className = 'hg-dl-name';
+    name.textContent = record.name || '下载文件';
+    name.title = record.savePath || record.url || '';
+    const bar = document.createElement('div');
+    bar.className = 'hg-dl-bar';
+    const fill = document.createElement('i');
+    const total = Number(record.total) || 0;
+    const received = Number(record.received) || 0;
+    if (record.state === 'progressing' && !total) bar.classList.add('indeterminate');
+    fill.style.width = total > 0 ? `${Math.min(100, Math.max(0, (received / total) * 100))}%` : '0%';
+    if (record.state === 'completed') { fill.style.width = '100%'; bar.classList.add('done'); }
+    if (record.state === 'cancelled' || record.state === 'interrupted') fill.style.background = 'rgba(127,127,127,.5)';
+    bar.append(fill);
+    const meta = document.createElement('div');
+    meta.className = 'hg-dl-meta';
+    const pieces = [];
+    if (record.state === 'progressing') pieces.push(total > 0 ? `${Math.round((received / total) * 100)}%` : '下载中');
+    else pieces.push(downloadStateText(record) || '下载中');
+    if (total > 0) pieces.push(`${downloadBytes(received)} / ${downloadBytes(total)}`);
+    else if (received > 0) pieces.push(downloadBytes(received));
+    const speed = record.state === 'progressing' ? downloadSpeed(record.speed) : '';
+    if (speed) pieces.push(speed);
+    if (record.url) { try { pieces.push(new URL(record.url).hostname); } catch { /* keep it short */ } }
+    meta.textContent = pieces.join(' · ');
+    item.append(name, bar, meta);
+    if (record.error) {
+      const error = document.createElement('div');
+      error.className = 'hg-dl-err';
+      error.textContent = record.error;
+      item.appendChild(error);
+    }
+    const actions = document.createElement('div');
+    actions.className = 'hg-dl-actions';
+    if (record.state === 'progressing') {
+      const cancel = document.createElement('button');
+      cancel.type = 'button';
+      cancel.dataset.dlAction = 'cancel';
+      cancel.dataset.dlId = record.id;
+      cancel.textContent = '取消';
+      actions.appendChild(cancel);
+    }
+    if (record.state === 'completed' && record.savePath) {
+      const reveal = document.createElement('button');
+      reveal.type = 'button';
+      reveal.dataset.dlAction = 'reveal';
+      reveal.dataset.dlId = record.id;
+      reveal.textContent = '打开所在文件夹';
+      actions.appendChild(reveal);
+    }
+    if (actions.childElementCount) item.appendChild(actions);
+    body.appendChild(item);
+  }
+  if (payload?.notice) {
+    const notice = document.createElement('div');
+    notice.className = 'hg-dl-notice';
+    notice.textContent = payload.notice;
+    root.appendChild(notice);
+    setTimeout(() => { notice.remove(); }, 6_000);
+  }
+  placeDownloadPanel();
+}
+
+function installDownloadUi() {
+  if (typeof document === 'undefined') return;
+  const start = () => {
+    try { renderDownloads(lastDownloads); } catch { /* The panel must never break the app. */ }
+  };
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', start, { once: true });
+  else start();
+  window.addEventListener('resize', placeDownloadPanel);
+  try {
+    const observer = new ResizeObserver(placeDownloadPanel);
+    const attach = () => {
+      const canvas = document.querySelector('#browser-panel .browser-canvas');
+      if (canvas) { observer.observe(canvas); return true; }
+      return false;
+    };
+    if (!attach()) {
+      const watcher = new MutationObserver(() => { if (attach()) watcher.disconnect(); });
+      watcher.observe(document.documentElement, { childList: true, subtree: true });
+    }
+  } catch { /* Older renderer without ResizeObserver. */ }
+}
+
+
+ipcRenderer.on(BROWSER_DOWNLOADS_CHANNEL, (_event, payload) => {
+  if (!payload || typeof payload !== "object") return;
+  const downloads = Array.isArray(payload.downloads) ? payload.downloads.filter(record => record && typeof record.id === "string" && typeof record.state === "string").slice(-12) : [];
+  lastDownloads = Object.freeze({
+    downloads: Object.freeze(downloads.map(record => Object.freeze({
+      id: record.id.slice(0, 32), name: String(record.name ?? "").slice(0, 200),
+      url: String(record.url ?? "").slice(0, 2_048), savePath: String(record.savePath ?? "").slice(0, 1_024),
+      state: record.state.slice(0, 20), received: Number(record.received) || 0, total: Number(record.total) || 0,
+      speed: Number(record.speed) || 0, error: String(record.error ?? "").slice(0, 200),
+    }))),
+    notice: typeof payload.notice === "string" ? payload.notice.slice(0, 200) : "",
+  });
+  try { renderDownloads(lastDownloads); } catch { /* The panel must never break the app. */ }
+  for (const callback of downloadSubscribers) {
+    try { callback(lastDownloads); } catch { /* A UI callback must not break the bridge. */ }
+  }
+});
+
+installDownloadUi();
+
 contextBridge.exposeInMainWorld('harnessDesktop', Object.freeze({
   browser: Object.freeze({
     getState: () => browserCommand('getState'),
@@ -438,12 +715,24 @@ contextBridge.exposeInMainWorld('harnessDesktop', Object.freeze({
           amount: Number.isInteger(result.amount) ? result.amount : 0,
           scrollY: Number.isInteger(result.scrollY) ? result.scrollY : null,
           scrollHeight: Number.isInteger(result.scrollHeight) ? result.scrollHeight : null,
+          extra: jsonCopy({
+            ref: result.ref, focusedElement: result.focusedElement ?? null, hitVerified: result.hitVerified === true,
+            valueAfter: result.valueAfter, valueMatches: result.valueMatches, valueHidden: result.valueHidden === true,
+            scrollBefore: result.scrollBefore, scrolledBy: result.scrolledBy, scrollContainer: result.scrollContainer,
+            atTop: result.atTop, atBottom: result.atBottom, pendingInputs: result.pendingInputs ?? [],
+            target: result.target ?? null,
+          }),
         }),
       });
     }),
+    visibility: timeoutMs => ipcRenderer.invoke(BROWSER_COMMAND_CHANNEL, 'visibility', Number.isFinite(timeoutMs) ? timeoutMs : 4000).then(payload => Object.freeze({
+      visible: payload?.visible === true,
+      hiddenReason: typeof payload?.hiddenReason === 'string' ? payload.hiddenReason.slice(0, 200) : '',
+    })),
     home: () => browserCommand('home'),
     openExternal: () => browserCommand('openExternal'),
     openDevTools: () => browserCommand('openDevTools'),
+    clearSiteData: () => browserCommand('clearSiteData'),
     setViewport: value => browserCommand('setViewport', {
       x: value?.x, y: value?.y, width: value?.width, height: value?.height, visible: value?.visible,
       ...(value?.clip !== undefined ? { clip: { x: value.clip?.x, y: value.clip?.y, width: value.clip?.width, height: value.clip?.height } } : {}),
@@ -452,6 +741,15 @@ contextBridge.exposeInMainWorld('harnessDesktop', Object.freeze({
     setPresentation: value => browserCommand('setPresentation', {
       mode: value?.mode, zoom: value?.zoom, viewport: { width: value?.viewport?.width, height: value?.viewport?.height },
     }),
+    onDownloads(callback) {
+      if (typeof callback !== 'function') return () => {};
+      downloadSubscribers.add(callback);
+      if (lastDownloads) { try { callback(lastDownloads); } catch { /* A UI callback must not break the bridge. */ } }
+      return () => downloadSubscribers.delete(callback);
+    },
+    cancelDownload: id => ipcRenderer.invoke(BROWSER_DOWNLOAD_COMMAND_CHANNEL, 'cancel', typeof id === 'string' ? id.slice(0, 32) : ''),
+    revealDownload: id => ipcRenderer.invoke(BROWSER_DOWNLOAD_COMMAND_CHANNEL, 'reveal', typeof id === 'string' ? id.slice(0, 32) : ''),
+    clearDownloads: () => ipcRenderer.invoke(BROWSER_DOWNLOAD_COMMAND_CHANNEL, 'clear'),
     onState(callback) {
       if (typeof callback !== 'function') return () => {};
       browserSubscribers.add(callback);

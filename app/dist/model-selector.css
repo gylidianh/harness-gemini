@@ -44,7 +44,8 @@
 .model-selector-status { font-size: 11px; padding: 0 14px 8px; flex-shrink: 0; }
 .model-selector-error { color: var(--danger-strong); line-height: 1.6; margin: 0; padding: 4px 14px; }
 .model-selector-body { display: flex; min-height: 0; flex: 1; overflow: hidden; }
-.model-provider-rail { display: flex; flex-direction: column; gap: 6px; align-items: center; width: 62px; padding: 10px 6px; border-right: 1px solid var(--line); background: var(--bg); overflow-y: auto; flex-shrink: 0; box-sizing: border-box; }
+.model-provider-rail { display: flex; flex-direction: column; gap: 6px; align-items: center; width: 62px; padding: 10px 6px; border-right: 1px solid var(--line); background: var(--bg); overflow-x: hidden; overflow-y: auto; scrollbar-width: none; flex-shrink: 0; box-sizing: border-box; }
+.model-provider-rail::-webkit-scrollbar { display: none; width: 0; height: 0; }
 .model-provider-tab { position: relative; display: grid; place-items: center; width: 44px; min-height: 44px; flex-shrink: 0; border: 1px solid transparent; border-radius: 11px; background: transparent; color: var(--muted); cursor: pointer; }
 .model-provider-tab:hover { background: var(--hover); }
 .model-provider-tab[aria-pressed="true"] { background: var(--accent-tonal); border-color: var(--line-strong); color: var(--text); }
@@ -57,7 +58,7 @@
 .model-selector-trigger .model-provider-icon { width: 16px; height: 16px; font-size: 11px; border-radius: 4px; }
 .model-selector-trigger .model-provider-icon svg { width: 16px; height: 16px; }
 .model-selector-main { display: flex; flex-direction: column; flex: 1; min-width: 0; min-height: 0; overflow: hidden; }
-.model-selector-options { min-height: 48px; max-height: 360px; overflow-y: auto; overscroll-behavior: contain; padding: 3px 8px 8px; flex: 1; }
+.model-selector-options { min-height: 48px; max-height: 360px; overflow-x: hidden; overflow-y: auto; overscroll-behavior: contain; padding: 3px 8px 8px; flex: 1; }
 .model-selector-group-label { font-size: 11px; font-weight: 600; color: var(--muted); padding: 12px 10px 6px; }
 .model-selector-option { display: flex; align-items: center; gap: 10px; width: 100%; border: 0; border-radius: 10px; padding: 11px 10px; background: transparent; color: var(--text); text-align: left; cursor: pointer; font: inherit; font-size: 13px; line-height: 1.5; }
 .model-selector-option .model-selector-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }

@@ -141,14 +141,14 @@ export const AGENT_TOOLS = [
   functionTool('browser_open', '在内置浏览器（应用右侧的浏览器面板）中打开网页，让用户看到这个页面。只返回地址和标题，不返回网页正文；需要正文请接着调用 browser_page_content。不带 url 时只打开面板。', { url: { type: 'string', description: '要打开的公开网址；省略则只打开面板' } }),
   functionTool('browser_navigate', '在内置浏览器中打开网址，等页面加载完成后返回标题、最终地址和渲染后的可见文字，其中可包含 JavaScript 动态生成的内容。网页需要 JavaScript 渲染、或需要用户同时看到页面时用它；普通静态网页用 fetch_url 更快。内置浏览器不会登录、不绕过验证码，也不共享用户在其他浏览器中的登录状态。', { url: { type: 'string', description: '要打开的公开网址' }, maxChars: { type: 'integer', minimum: 1000, maximum: 100000, description: '正文字符上限，默认20000' }, timeoutMs: { type: 'integer', minimum: 5000, maximum: 60000, description: '等待页面加载的最长时间，默认45000毫秒' } }, ['url']),
   functionTool('browser_snapshot', '读取内置浏览器当前页面的可交互元素，每个元素带有 ref、角色、名称和位置（包括可视区域外的元素，标记 inViewport:false，操作时会自动滚动），以及页面尺寸和滚动位置。点击、输入前先用它拿到 ref；页面变化后 ref 会失效，需要重新读取。只返回结构化信息，不返回页面正文。', { timeoutMs: { type: 'integer', minimum: 1000, maximum: 60000, description: '等待页面加载的最长时间，默认20000毫秒' } }),
-  functionTool('browser_act', '在内置浏览器中像真实用户一样操作页面：按 browser_snapshot 的 ref 点击、输入、按键、滚动或拖拽。每次操作都会在执行前重新确认元素位置，因此页面重绘也不会点错。只使用本工具返回的 ref；不要凭猜测填写坐标。', {
+  functionTool('browser_act', '在内置浏览器中像真实用户一样操作页面：按 browser_snapshot 的 ref 点击、输入、按键、滚动或拖拽。所有操作都要求浏览器面板显示；面板被收起时会先自动打开，打不开才报错。每次操作前都会重新确认 ref 仍是快照里的那个元素（名称、所在行 context 不变）并做命中检测，元素被遮挡或已变化时不执行。type 后只是填进输入框，返回的 pendingInputs 列出尚未提交的输入；必须点击保存/提交并核对结果，不能凭输入框里的值认定改动已生效。', {
     action: { type: 'string', enum: ['click', 'type', 'press', 'scroll', 'drag'], description: '要执行的操作' },
     ref: { type: 'string', description: 'browser_snapshot 返回的元素 ref，例如 h3；drag 时省略' },
-    text: { type: 'string', description: 'type 要输入的文本，最多 4000 字符' },
+    text: { type: 'string', description: 'type 要输入的文本；press 时表示向当前焦点输入框插入的一串文字（先插入再按 keys），最多 4000 字符' },
     submit: { type: 'boolean', description: 'type 输入后按 Enter 提交，默认 false' },
     replace: { type: 'boolean', description: 'type 时先全选替换原内容，默认 true；设为 false 表示追加' },
     clickCount: { type: 'integer', minimum: 1, maximum: 3, description: 'click 的点击次数，默认 1' },
-    keys: { type: 'string', description: 'press 的按键，例如 "Enter"、"Control+A"' },
+    keys: { type: 'string', description: 'press 的按键，例如 "Enter"、"Control+A"；只输入文字时可省略' },
     direction: { type: 'string', enum: ['up', 'down', 'top', 'bottom'], description: 'scroll 的方向，默认 down' },
     amount: { type: 'integer', minimum: 40, maximum: MAX_SCROLL_PIXELS, description: 'scroll 的像素距离，默认 600' },
     from: { type: 'object', description: 'drag 起点：{ ref } 或 { x, y }', properties: { ref: { type: 'string' }, x: { type: 'integer' }, y: { type: 'integer' } } },
@@ -579,9 +579,13 @@ function browserToolResult(action, result, args) {
   if (action === 'open') {
     return {
       url: result.url, title: result.title, loading: result.loading, opened: true,
-      note: result.url
-        ? '页面已在内置浏览器中打开，用户可以看到它。需要网页正文时调用 browser_page_content。'
-        : '内置浏览器面板已打开，当前还没有网页。',
+      ...(result.visible !== undefined ? { visible: result.visible } : {}),
+      ...(result.hiddenReason ? { hiddenReason: result.hiddenReason } : {}),
+      note: result.visible === false
+        ? `已请求打开内置浏览器，但面板没有显示出来（${result.hiddenReason || '原因未知'}）；browser_act 会再尝试自动显示，仍失败时请让用户展开右侧浏览器面板。`
+        : result.url
+          ? '页面已在内置浏览器中打开，面板已确认可见。需要网页正文时调用 browser_page_content。'
+          : '内置浏览器面板已打开并确认可见，当前还没有网页。',
     };
   }
   const text = result.text.replace(/\r\n?/g, '\n');
@@ -601,6 +605,11 @@ function browserSnapshotResult(result) {
     if (element.disabled) line.disabled = true;
     if (element.checked !== undefined) line.checked = element.checked === true;
     if (element.inViewport === false) line.inViewport = false;
+    if (element.context) line.context = element.context;
+    if (element.modal) line.modal = true;
+    if (element.frame) line.frame = true;
+    if (element.shadow) line.shadow = true;
+    if (element.duplicates) { line.nth = element.nth; line.duplicates = element.duplicates; }
     if (element.type) line.type = element.type;
     if (element.value) line.value = element.value;
     if (element.options) line.options = element.options;
@@ -609,6 +618,11 @@ function browserSnapshotResult(result) {
   return {
     url: result.url, title: result.title, viewport: result.viewport,
     elements, count: elements.length, truncated: result.truncated,
+    ...(result.scroll ? { scroll: result.scroll } : {}),
+    ...(result.modal ? { modal: result.modal, modalNote: `页面上有打开的弹窗“${result.modal.name}”，其中的 ${result.modal.elements} 个元素（modal:true）排在最前。` } : {}),
+    ...(result.visible === false ? { visible: false, hiddenNote: `浏览器面板当前没有显示（${result.hiddenReason || '原因未知'}）；读取不受影响，browser_act 会先尝试自动显示面板。` } : {}),
+    ...(result.pendingInputs?.length ? { pendingInputs: result.pendingInputs, pendingNote: '这些输入框里有代理填入但尚未提交的值。' } : {}),
+    ...(elements.some(element => element.duplicates) ? { duplicateNote: '有多个元素角色和名称相同（带 nth/duplicates），请用 context（所在行文字）区分，不要只看名称。' } : {}),
     via: 'built-in browser', untrusted: true, notice: UNTRUSTED_BROWSER_NOTICE,
     ...(elements.length ? {} : { note: '整个页面（包括可视区域外）都没有检测到可交互元素；页面可能尚未渲染完成或需要登录，可先调用 browser_page_content 查看文字。' }),
     ...(elements.some(element => element.inViewport === false) ? { offscreenNote: '标记 inViewport:false 的元素在当前可视区域外；用 browser_act 操作时会自动滚动到可见位置，坐标仅供参考。' } : {}),
@@ -624,6 +638,8 @@ function browserActionResult(result) {
     report.stillPresent = result.stillPresent;
     report.moved = result.moved;
     if (result.scrolled) report.scrolledIntoView = true;
+    if (result.hitVerified) report.hitVerified = true;
+    if (result.focusedElement) report.focusedElement = result.focusedElement;
     if (!result.stillPresent) report.note = '点击后这个元素已不在页面上，通常表示页面已经跳转或重新渲染；请重新调用 browser_snapshot 确认现状。';
     else if (!result.moved) report.note = '点击已发送。元素仍在原位置，这不代表操作失败——页面可能只是更新了内容；请用 browser_snapshot 或 browser_page_content 确认效果。';
   }
@@ -631,13 +647,30 @@ function browserActionResult(result) {
     report.characters = result.characters;
     report.replacedExistingText = result.replaced;
     if (result.submitted) report.submitted = true;
+    if (result.valueHidden) report.valueHidden = true;
+    if (result.valueAfter !== undefined) report.valueAfter = result.valueAfter;
+    if (result.valueMatches !== undefined) report.valueMatches = result.valueMatches;
+    if (result.valueMatches === false) report.warning = '输入框里的值和要输入的文字不一致，页面可能改写或拦截了输入；请检查 valueAfter。';
   }
-  if (result.action === 'press') { report.keys = result.keys; report.focusedElement = result.focused; }
+  if (result.action === 'press') {
+    report.keys = result.keys;
+    report.focusedElement = result.focusedElement ?? null;
+    if (result.characters) report.characters = result.characters;
+  }
   if (result.action === 'scroll') {
     if (result.direction) report.direction = result.direction;
     if (result.amount !== undefined) report.amount = result.amount;
     if (result.scrollY !== undefined) report.scrollY = result.scrollY;
     if (result.scrollHeight !== undefined) report.scrollHeight = result.scrollHeight;
+    if (result.scrollContainer) report.scrollContainer = result.scrollContainer;
+    if (result.scrolledBy !== undefined) report.scrolledBy = result.scrolledBy;
+    if (result.atTop) report.atTop = true;
+    if (result.atBottom) report.atBottom = true;
+    if (result.scrolledBy === 0) report.note = '滚动没有产生位移：可能已经到头，或该位置没有可滚动的区域；可以带 ref 指定要滚动的区域内的元素。';
+  }
+  if (result.pendingInputs?.length) {
+    report.pendingInputs = result.pendingInputs;
+    report.pendingNote = '页面上还有尚未提交的输入（只是填进了输入框）。完成前请点击保存/提交，并重新读取页面或其他来源核对改动是否真的生效。';
   }
   if (result.action === 'drag') { report.steps = result.steps; if (result.from) report.from = result.from; if (result.to) report.to = result.to; }
   return report;
