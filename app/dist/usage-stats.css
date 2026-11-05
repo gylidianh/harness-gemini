@@ -1,0 +1,597 @@
+/* 1.4.6: 用量统计 — local token & conversation usage dashboard in Settings */
+
+:root {
+  --hgus-chart-1: #0b7fff;
+  --hgus-chart-2: #1e8a3e;
+  --hgus-chart-3: #7b5ce5;
+  --hgus-chart-4: #e03131;
+  --hgus-chart-5: #e07b00;
+  --hgus-chart-6: #0aa7a7;
+  --hgus-heatmap-0: color-mix(in srgb, var(--text) 6%, var(--surface));
+  --hgus-heatmap-1: color-mix(in srgb, var(--accent) 22%, var(--surface));
+  --hgus-heatmap-2: color-mix(in srgb, var(--accent) 44%, var(--surface));
+  --hgus-heatmap-3: color-mix(in srgb, var(--accent) 68%, var(--surface));
+  --hgus-heatmap-4: color-mix(in srgb, var(--accent) 90%, var(--surface));
+}
+
+html[data-skin=gemini-dark],
+.app-shell[data-skin=gemini-dark] {
+  --hgus-chart-1: #4099ff;
+  --hgus-chart-2: #46bf72;
+  --hgus-chart-3: #9e77ed;
+  --hgus-chart-4: #ff5c5c;
+  --hgus-chart-5: #ff8a30;
+  --hgus-chart-6: #42c8c8;
+  --hgus-heatmap-0: color-mix(in srgb, var(--text) 7%, var(--surface));
+  --hgus-heatmap-1: color-mix(in srgb, #4099ff 26%, var(--surface));
+  --hgus-heatmap-2: color-mix(in srgb, #4099ff 46%, var(--surface));
+  --hgus-heatmap-3: color-mix(in srgb, #4099ff 68%, var(--surface));
+  --hgus-heatmap-4: color-mix(in srgb, #80beff 88%, var(--surface));
+}
+
+html[data-skin=luxe-noir],
+.app-shell[data-skin=luxe-noir] {
+  --hgus-chart-1: #d4af6a;
+  --hgus-chart-2: #72b896;
+  --hgus-chart-3: #9c82e8;
+  --hgus-chart-4: #e98a7c;
+  --hgus-chart-5: #5da9e9;
+  --hgus-chart-6: #e6bd6a;
+  --hgus-heatmap-0: color-mix(in srgb, var(--text) 7%, var(--surface));
+  --hgus-heatmap-1: color-mix(in srgb, #d4af6a 26%, var(--surface));
+  --hgus-heatmap-2: color-mix(in srgb, #d4af6a 46%, var(--surface));
+  --hgus-heatmap-3: color-mix(in srgb, #d4af6a 68%, var(--surface));
+  --hgus-heatmap-4: color-mix(in srgb, #e8cb8c 90%, var(--surface));
+}
+
+.hgus-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  min-width: 0;
+}
+
+.hgus-lifetime-strip {
+  display: flex;
+  align-items: center;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  background: color-mix(in srgb, var(--sidebar) 55%, var(--surface));
+  overflow: hidden;
+}
+
+.hgus-lifetime-item {
+  flex: 1 1 0;
+  min-width: 0;
+  padding: 13px 12px;
+  text-align: center;
+}
+
+.hgus-lifetime-value {
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--text);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.hgus-lifetime-label {
+  margin-top: 4px;
+  font-size: 12px;
+  color: var(--muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.hgus-lifetime-divider {
+  width: 1px;
+  height: 28px;
+  background: var(--line);
+  flex-shrink: 0;
+}
+
+.hgus-card {
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  background: color-mix(in srgb, var(--sidebar) 45%, var(--surface));
+  padding: 14px 16px;
+  min-width: 0;
+}
+
+.hgus-card-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 12px;
+}
+
+.hgus-card-title {
+  margin: 0;
+  font-size: 13.5px;
+  font-weight: 600;
+  color: var(--text);
+}
+
+.hgus-heatmap-controls {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+
+.hgus-heatmap-hover-readout {
+  font-size: 11.5px;
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 340px;
+}
+
+.hgus-tabs {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px;
+  border-radius: 999px;
+  background: var(--sidebar);
+  border: 1px solid var(--line);
+  flex-shrink: 0;
+}
+
+.hgus-tab {
+  height: 24px;
+  padding: 0 10px;
+  border: 0;
+  border-radius: 999px;
+  background: transparent;
+  color: var(--muted);
+  font: inherit;
+  font-size: 11.5px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background-color .12s, color .12s;
+}
+
+.hgus-tab:hover {
+  color: var(--text);
+}
+
+.hgus-tab.active {
+  background: var(--surface);
+  color: var(--text);
+  box-shadow: 0 1px 2px #00000018;
+}
+
+.hgus-heatmap-grid {
+  display: grid;
+  grid-template-columns: repeat(52, minmax(0, 1fr));
+  gap: 2px;
+  width: 100%;
+}
+
+.hgus-heatmap-col {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.hgus-heatmap-cell {
+  aspect-ratio: 1 / 1;
+  width: 100%;
+  min-width: 0;
+  border-radius: 3px;
+  border: 1px solid transparent;
+  transition: transform .1s ease, border-color .1s ease;
+}
+
+.hgus-heatmap-cell.level-0 { background-color: var(--hgus-heatmap-0); }
+.hgus-heatmap-cell.level-1 { background-color: var(--hgus-heatmap-1); }
+.hgus-heatmap-cell.level-2 { background-color: var(--hgus-heatmap-2); }
+.hgus-heatmap-cell.level-3 { background-color: var(--hgus-heatmap-3); }
+.hgus-heatmap-cell.level-4 { background-color: var(--hgus-heatmap-4); }
+
+.hgus-heatmap-cell.has-usage {
+  border-color: color-mix(in srgb, var(--line-strong) 55%, transparent);
+}
+
+.hgus-heatmap-cell:hover,
+.hgus-heatmap-col.is-column-mode:hover .hgus-heatmap-cell {
+  border-color: var(--accent);
+}
+
+.hgus-heatmap-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-top: 9px;
+}
+
+.hgus-heatmap-months {
+  flex: 1;
+  display: grid;
+  grid-template-columns: repeat(52, minmax(0, 1fr));
+  gap: 2px;
+  min-width: 0;
+}
+
+.hgus-heatmap-month {
+  font-size: 10.5px;
+  color: var(--subtle);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.hgus-heatmap-legend {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 10.5px;
+  color: var(--subtle);
+  flex-shrink: 0;
+}
+
+.hgus-heatmap-legend .hgus-heatmap-cell {
+  width: 10px;
+  height: 10px;
+  display: inline-block;
+}
+
+.hgus-range-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.hgus-range-title {
+  font-size: 13.5px;
+  font-weight: 600;
+  color: var(--text);
+}
+
+.hgus-detail-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.hgus-detail-card {
+  min-width: 0;
+  padding: 11px 12px;
+  border-radius: 12px;
+  border: 1px solid var(--line);
+  background: color-mix(in srgb, var(--sidebar) 45%, var(--surface));
+}
+
+.hgus-detail-label {
+  font-size: 11.5px;
+  color: var(--muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.hgus-detail-value {
+  margin-top: 4px;
+  font-size: 17px;
+  font-weight: 600;
+  color: var(--text);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.hgus-detail-sub {
+  margin-top: 3px;
+  font-size: 10.5px;
+  color: var(--subtle);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.hgus-trend-body {
+  margin-top: 10px;
+}
+
+.hgus-legend {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 14px;
+  margin-bottom: 10px;
+}
+
+.hgus-legend-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.hgus-swatch {
+  width: 10px;
+  height: 10px;
+  border-radius: 3px;
+  flex-shrink: 0;
+}
+
+.hgus-legend-label {
+  max-width: 200px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.hgus-chart-stage {
+  position: relative;
+  width: 100%;
+}
+
+.hgus-trend-svg {
+  display: block;
+  width: 100%;
+  height: 220px;
+  overflow: visible;
+}
+
+.hgus-grid-line {
+  stroke: var(--line);
+  stroke-width: 1;
+}
+
+.hgus-hover-line {
+  stroke: var(--line-strong);
+  stroke-width: 1;
+  stroke-dasharray: 3 3;
+}
+
+.hgus-axis-label {
+  fill: var(--subtle);
+  font-size: 11px;
+}
+
+.hgus-chart-tooltip {
+  position: absolute;
+  top: 10px;
+  right: 14px;
+  z-index: 5;
+  min-width: 190px;
+  max-width: 280px;
+  padding: 8px 10px;
+  border-radius: 10px;
+  border: 1px solid var(--line-strong);
+  background: var(--surface);
+  box-shadow: var(--shadow-2);
+  pointer-events: none;
+  font-size: 11.5px;
+}
+
+.hgus-chart-tooltip.align-left {
+  right: auto;
+  left: 14px;
+}
+
+.hgus-tooltip-title {
+  font-weight: 600;
+  color: var(--text);
+  margin-bottom: 5px;
+  font-variant-numeric: tabular-nums;
+}
+
+.hgus-tooltip-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 2px 0;
+}
+
+.hgus-tooltip-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 999px;
+  flex-shrink: 0;
+}
+
+.hgus-tooltip-name {
+  flex: 1;
+  min-width: 0;
+  color: var(--muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.hgus-tooltip-val {
+  color: var(--text);
+  font-family: "Cascadia Code", Consolas, monospace;
+  font-variant-numeric: tabular-nums;
+}
+
+.hgus-pie-grid {
+  display: grid;
+  grid-template-columns: minmax(190px, 240px) minmax(0, 1fr);
+  gap: 18px;
+  align-items: center;
+  margin-top: 8px;
+}
+
+.hgus-donut-wrap {
+  position: relative;
+  width: 100%;
+  max-width: 220px;
+  margin: 0 auto;
+}
+
+.hgus-donut-svg {
+  display: block;
+  width: 100%;
+  height: auto;
+}
+
+.hgus-donut-slice {
+  cursor: pointer;
+  transition: opacity .14s ease, transform .14s ease;
+  transform-origin: center;
+}
+
+.hgus-donut-slice.is-hovered {
+  transform: scale(1.03);
+}
+
+.hgus-donut-center {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 0 28px;
+  text-align: center;
+  pointer-events: none;
+}
+
+.hgus-donut-total {
+  max-width: 100%;
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--text);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.hgus-donut-unit {
+  max-width: 100%;
+  margin-top: 2px;
+  font-size: 11px;
+  color: var(--muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.hgus-model-list {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.hgus-model-row {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 3px 8px;
+  padding: 8px 6px;
+  border-bottom: 1px solid var(--line);
+  border-radius: 7px;
+  transition: background-color .12s;
+}
+
+.hgus-model-row:last-child {
+  border-bottom: 0;
+}
+
+.hgus-model-row.is-hovered {
+  background: var(--hover);
+}
+
+.hgus-model-name {
+  min-width: 0;
+  font-family: "Cascadia Code", Consolas, monospace;
+  font-size: 12px;
+  color: var(--text);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.hgus-model-share {
+  font-family: "Cascadia Code", Consolas, monospace;
+  font-size: 12px;
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.hgus-model-tokens {
+  grid-column: 2 / 4;
+  min-width: 0;
+  font-size: 11px;
+  color: var(--subtle);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.hgus-empty {
+  margin-top: 8px;
+  padding: 28px 16px;
+  border: 1px dashed var(--line-strong);
+  border-radius: 12px;
+  text-align: center;
+}
+
+.hgus-empty-title {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--text);
+}
+
+.hgus-empty-desc {
+  margin-top: 5px;
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.hgus-error {
+  padding: 10px 12px;
+  border-radius: 10px;
+  border: 1px solid var(--danger-border, var(--red));
+  background: var(--danger-surface, var(--red-tonal));
+  color: var(--danger-strong, var(--red));
+  font-size: 12px;
+}
+
+.hgus-footer-actions {
+  display: flex;
+  justify-content: flex-end;
+}
+
+.hgus-refresh-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 32px;
+  padding: 5px 12px;
+  border: 1px solid var(--line-strong);
+  border-radius: 8px;
+  font-size: 12px;
+}
+
+@media (max-width: 820px) {
+  .hgus-lifetime-strip {
+    flex-wrap: wrap;
+  }
+  .hgus-lifetime-divider {
+    display: none;
+  }
+  .hgus-detail-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .hgus-pie-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}

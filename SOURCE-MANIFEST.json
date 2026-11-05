@@ -1,20 +1,34 @@
 {
-  "version": "1.4.4",
-  "release": "https://github.com/gylidianh/harness-gemini/releases/tag/v1.4.4",
-  "installerSha256": "e890b2620cee91c4844427282b14f216dc627740b04e08f81c40bafa70d81b8b",
-  "appArchiveSha256": "05ec57bc4208bf2eef0b3b79a6f76f2711f2d9f7d22e439a292cf436d999ce26",
-  "scope": "Desktop, server, shared modules, editable UI modules, prebuilt frontend assets and notices. Original React source is unavailable.",
+  "version": "1.5.7",
+  "release": "https://github.com/gylidianh/harness-gemini/releases/tag/v1.5.7",
+  "installerSha256": "b7e9e306280f24752ca86a789ce5ba14d4900076950e4191f08fcbd18de7c8c0",
+  "installerBytes": 127946404,
+  "appArchiveSha256": "05c89a239d50b0e0eac752d1474732cdb4206739ecb6bd2d417fbe4731eec09b",
+  "scope": "Desktop, server, shared modules, editable UI modules, prebuilt frontend assets, icons and notices. Original React/Vite source is unavailable.",
+  "verification": "167 application files match the rebuilt 1.5.7 app.asar byte-for-byte. Static integrity and syntax checks only; application, installer, regression tests and benchmarks were not run.",
   "excluded": [
     "node_modules",
-    "package.json.bak",
     "runtime data",
-    "local build scripts and absolute paths"
+    "configuration and credentials",
+    "sessions and logs",
+    "backups",
+    "local build logs and absolute paths"
   ],
   "files": [
     {
+      "path": "app/THIRD-PARTY-NOTICES.md",
+      "sha256": "07b1d58bfccf50b6be502b3a1dd9059cb2048b21d78243c7c255f82f4a6db79b",
+      "bytes": 9151
+    },
+    {
       "path": "app/build/icon.ico",
-      "sha256": "b702e5e05c290817f7ae8c487d403afcff67b876c3516d0715a5c9ddb4fae37a",
-      "bytes": 258441
+      "sha256": "9d86ea0066b500e133fe01609c8cbc6308728bbee95a194ac168f2fc072a30fe",
+      "bytes": 126459
+    },
+    {
+      "path": "app/build/icon.png",
+      "sha256": "d0d14ac063816950bf746f8ca660bf6366d04b7e894f4b54addeea306eb600d4",
+      "bytes": 77749
     },
     {
       "path": "app/desktop/browser-network-policy.mjs",
@@ -48,8 +62,8 @@
     },
     {
       "path": "app/desktop/main.mjs",
-      "sha256": "cb8330ef8be85735ec971344e8d1b5e5d6d7f85ee3caa013d43c089def465768",
-      "bytes": 49562
+      "sha256": "e3eb763148f5b7b1838144e68f6555071a23cae7e550a5fc261b450298159a23",
+      "bytes": 50518
     },
     {
       "path": "app/desktop/native-affinity.mjs",
@@ -102,6 +116,11 @@
       "bytes": 19773
     },
     {
+      "path": "app/desktop/taskbar-attention.mjs",
+      "sha256": "02bd2115c29bfaa84c92f4b305c2a92517490ccfa3f593ba87c48a589fddaaf4",
+      "bytes": 3941
+    },
+    {
       "path": "app/desktop/titlebar-keys.mjs",
       "sha256": "1306f8ff4426585e2c674d74d6cf731763017ec2af2f2d0f10c1d8a60824314b",
       "bytes": 2667
@@ -112,19 +131,14 @@
       "bytes": 6532
     },
     {
-      "path": "app/dist/assets/brand-wordmark-CIbor7UQ.png",
-      "sha256": "d55cb5798085705bfc529eeb553ec437b6c45c69b54e0838ebe9717fa608ea4e",
-      "bytes": 25534
+      "path": "app/dist/advanced-settings.css",
+      "sha256": "ba289be6cdf21c79c76a890ea8f2eb5e9303b9ff3edc571856a1afe2260ef0a1",
+      "bytes": 2470
     },
     {
-      "path": "app/dist/assets/index-BbYfWXft.css",
-      "sha256": "54e25901f70adf1b0e89e9136930bab156ee71357679b5664ba225baa2b9ac46",
-      "bytes": 169755
-    },
-    {
-      "path": "app/dist/assets/index-BWW8q4t7.js",
-      "sha256": "7f614637580f8867b16e9b1b015484b030f2a6af60bb100eb77e258676754280",
-      "bytes": 890575
+      "path": "app/dist/advanced-settings.js",
+      "sha256": "6656e91b47198bf6a43ea1ea18a4dd36a415f50634df87b4aaf2d5a2c44b0b8e",
+      "bytes": 13382
     },
     {
       "path": "app/dist/assets/KaTeX_AMS-Regular-BQhdFMY1.woff2",
@@ -402,14 +416,14 @@
       "bytes": 5980
     },
     {
-      "path": "app/dist/assets/KaTeX_Size4-Regular-Dl5lxZxV.woff2",
-      "sha256": "a4af7d414440a1c1790825cfb700cf9cf43b0f2c4b04f0ebc523011ad9853ec0",
-      "bytes": 4928
-    },
-    {
       "path": "app/dist/assets/KaTeX_Size4-Regular-DWFBv043.ttf",
       "sha256": "c647367d1dd4e162468717d020e1fc0f1dc5c26ebfdffbe55261713bf88c5877",
       "bytes": 10364
+    },
+    {
+      "path": "app/dist/assets/KaTeX_Size4-Regular-Dl5lxZxV.woff2",
+      "sha256": "a4af7d414440a1c1790825cfb700cf9cf43b0f2c4b04f0ebc523011ad9853ec0",
+      "bytes": 4928
     },
     {
       "path": "app/dist/assets/KaTeX_Typewriter-Regular-C0xS9mPB.woff",
@@ -427,6 +441,21 @@
       "bytes": 27556
     },
     {
+      "path": "app/dist/assets/brand-wordmark-CIbor7UQ.png",
+      "sha256": "d55cb5798085705bfc529eeb553ec437b6c45c69b54e0838ebe9717fa608ea4e",
+      "bytes": 25534
+    },
+    {
+      "path": "app/dist/assets/index-BWW8q4t7.js",
+      "sha256": "441eb37c66f000e93201fc15b064bace260d83ad20beb403ef594d1ae7ebd941",
+      "bytes": 894261
+    },
+    {
+      "path": "app/dist/assets/index-BbYfWXft.css",
+      "sha256": "54e25901f70adf1b0e89e9136930bab156ee71357679b5664ba225baa2b9ac46",
+      "bytes": 169755
+    },
+    {
       "path": "app/dist/composer-controls.css",
       "sha256": "56346de19f42af978fd17ef0517bdeffc67869504c16f186ca1b173e506d9fe8",
       "bytes": 6217
@@ -442,9 +471,19 @@
       "bytes": 1069
     },
     {
+      "path": "app/dist/file-changes.css",
+      "sha256": "dd7fe28b5ee0735d28f9ee696d353449a59c1e4ff215c5815c7fd5ccd7eef23a",
+      "bytes": 8727
+    },
+    {
+      "path": "app/dist/file-changes.js",
+      "sha256": "0597c3d3b5b8001eef35d7d61945eab7a3b797bc68339966c989407bc27dadb3",
+      "bytes": 15366
+    },
+    {
       "path": "app/dist/index.html",
-      "sha256": "ed73074ff1028640aabd02566ad3c1520140b84ef534a9077f776da6a9adc356",
-      "bytes": 768
+      "sha256": "556bac6d8084bd9a03bf554131bd684c600d7ab1bf7afe17d717b7e4f50978f0",
+      "bytes": 931
     },
     {
       "path": "app/dist/model-selector.css",
@@ -460,6 +499,16 @@
       "path": "app/dist/provider-brand-data.js",
       "sha256": "1f3f4f82472f07b658d7d92851015c84577d6ee3e57f1f935143bc4aa4a76203",
       "bytes": 11045
+    },
+    {
+      "path": "app/dist/provider-brands/LICENSE-LobeHub.txt",
+      "sha256": "add9d7531d1b21646317a8958e38fc727506fa39d24bdecb44154d943c82753a",
+      "bytes": 1064
+    },
+    {
+      "path": "app/dist/provider-brands/README.md",
+      "sha256": "fe42c3d656dffa681feb0c9b45c767630ff5e64490c6bc1ee692bc9726a58ab9",
+      "bytes": 1600
     },
     {
       "path": "app/dist/provider-brands/claude.svg",
@@ -482,11 +531,6 @@
       "bytes": 781
     },
     {
-      "path": "app/dist/provider-brands/LICENSE-LobeHub.txt",
-      "sha256": "add9d7531d1b21646317a8958e38fc727506fa39d24bdecb44154d943c82753a",
-      "bytes": 1064
-    },
-    {
       "path": "app/dist/provider-brands/manifest.json",
       "sha256": "7c22f9e901639cada53a3c8d470da0916dc11399bbc15c639981be31d684b28a",
       "bytes": 2629
@@ -507,11 +551,6 @@
       "bytes": 1016
     },
     {
-      "path": "app/dist/provider-brands/README.md",
-      "sha256": "fe42c3d656dffa681feb0c9b45c767630ff5e64490c6bc1ee692bc9726a58ab9",
-      "bytes": 1600
-    },
-    {
       "path": "app/dist/session-tools.css",
       "sha256": "af9d263faa02c2086018290791580fc4693b32351ff005a95ae163615bbe5192",
       "bytes": 9038
@@ -523,8 +562,8 @@
     },
     {
       "path": "app/dist/settings-layout.js",
-      "sha256": "d27d8bbe1c2ac05e32c83a956958a12b851f59a79b2a64845e60fc9af3f8f370",
-      "bytes": 6732
+      "sha256": "4d5bc35533f7012dce148e5c26a66c90661a472186c8b48f94ff3b2dccbb4923",
+      "bytes": 7057
     },
     {
       "path": "app/dist/settings-ui.css",
@@ -542,14 +581,24 @@
       "bytes": 683
     },
     {
+      "path": "app/dist/usage-stats.css",
+      "sha256": "31550d0147a59caeab0cba8aeda151a4e438f3d6daa33bcbfe3e6cc0218fa70a",
+      "bytes": 11658
+    },
+    {
+      "path": "app/dist/usage-stats.js",
+      "sha256": "01def918b01663cd48351fe054e43ad8298fbf840b99cb136b8988c84d73e986",
+      "bytes": 35360
+    },
+    {
       "path": "app/package.json",
-      "sha256": "f3d30a30242d3e5031ab93a7ffa4a40a1def7e4c24b3fd06a672b07a4e87883f",
+      "sha256": "ae244527c4fe3683f993ed7d1dae6303049be5912a5f6871bbb07dec5736b2aa",
       "bytes": 732
     },
     {
       "path": "app/server/app.mjs",
-      "sha256": "2ed4931d83e3a5ab977a4b9d8739b56a7afacf1fea28f6676935ef28565a2142",
-      "bytes": 117151
+      "sha256": "260f95c4223c9d8b6886bf5dcb86b6013f1c846ec2612c69482ce182848e4ef2",
+      "bytes": 123914
     },
     {
       "path": "app/server/attachments.mjs",
@@ -568,8 +617,8 @@
     },
     {
       "path": "app/server/downloads.mjs",
-      "sha256": "c8bb53f900db07fdc137d7efdefac57816cac529550f04373591ee660127fab6",
-      "bytes": 8904
+      "sha256": "48d9ca16d4cd4b8b7183768ec7318b19c7c60eba1a83da3c0cd850792da40cfe",
+      "bytes": 9273
     },
     {
       "path": "app/server/error-log.mjs",
@@ -580,6 +629,11 @@
       "path": "app/server/external-skill-baselines.json",
       "sha256": "9045d73eb32e1f8b06ff063ed65d151a40bcf9fa065a4fac51489d94ea126878",
       "bytes": 3671
+    },
+    {
+      "path": "app/server/external-skill-samples/README.md",
+      "sha256": "37a02d195b0b4ee4b94945efb8604c0785ccc69ca7ba07b16cefe2dd5d0fec55",
+      "bytes": 4183
     },
     {
       "path": "app/server/external-skill-samples/customs_validator/customs_validator.py",
@@ -637,19 +691,19 @@
       "bytes": 5307
     },
     {
-      "path": "app/server/external-skill-samples/README.md",
-      "sha256": "37a02d195b0b4ee4b94945efb8604c0785ccc69ca7ba07b16cefe2dd5d0fec55",
-      "bytes": 4183
-    },
-    {
       "path": "app/server/external-skills.mjs",
       "sha256": "30b38e57359a6d611ea5253ded1b9db5a750ae3c35d4369057bdfa6b44631897",
       "bytes": 50798
     },
     {
+      "path": "app/server/file-changes.mjs",
+      "sha256": "71e2a5cca8c594599681cc6132e805917cbff3522d0b329a442d3db5f4047607",
+      "bytes": 23724
+    },
+    {
       "path": "app/server/http-agent.mjs",
-      "sha256": "9339fdb8e34e48435ed2c7ef439709fbee8baec07753be8d98fd6675eb9e5ae8",
-      "bytes": 1306
+      "sha256": "97856b5b03654df2e931007f463bfcc58e7e567498790456d5b94d01b392a6a5",
+      "bytes": 10548
     },
     {
       "path": "app/server/index.mjs",
@@ -687,9 +741,19 @@
       "bytes": 27763
     },
     {
+      "path": "app/server/provider-extra.mjs",
+      "sha256": "b48f5c63537773121c41662f8a4c05922a7da47d0dc7252684547b3c36b1961a",
+      "bytes": 14011
+    },
+    {
+      "path": "app/server/provider-limits.mjs",
+      "sha256": "df7a7ed967fdc5aaf0a24d487c1ab7361f2d9c37fc22cc078df2ea5e8c0fed76",
+      "bytes": 5927
+    },
+    {
       "path": "app/server/provider.mjs",
-      "sha256": "45c42f1a8275bd16798137790e3e0841c1ff966fd4a43fb8bc5afcc4865be9c6",
-      "bytes": 79803
+      "sha256": "1d254b03958d6ad857a7b727a45d4ec7b6e14bd4b80b37eac0e34396faf42f53",
+      "bytes": 81629
     },
     {
       "path": "app/server/read-guard.mjs",
@@ -708,13 +772,13 @@
     },
     {
       "path": "app/server/store.mjs",
-      "sha256": "459c59bf98be74fc5b8a4bb6789c64b9b58a3cfb83ddfbe2af6cfdcb4d8f91db",
-      "bytes": 47851
+      "sha256": "078b405d93d49538d933022b5ee21f9feb67840fff41e3add0ffc079feb3c015",
+      "bytes": 59014
     },
     {
       "path": "app/server/subagent.mjs",
-      "sha256": "eb15bc491bb019c0dfc0435d1525480678a3d5807131b06ae7051005977ba8ae",
-      "bytes": 36799
+      "sha256": "63c78638c32e64420d186753cf50578d6fc07ecea36d5a8eb09617a4aa1511b3",
+      "bytes": 38422
     },
     {
       "path": "app/server/tool-images.mjs",
@@ -723,8 +787,13 @@
     },
     {
       "path": "app/server/tools.mjs",
-      "sha256": "c033824d94b6b95e0ea2ba2528e6e5f87070c77e0480267559f1aa8be327fff2",
-      "bytes": 51844
+      "sha256": "d2de485d1a4e9e66f75cd1e66d916eec30cd22c3097f8e61cb98449e7dbf803f",
+      "bytes": 51952
+    },
+    {
+      "path": "app/server/usage-stats.mjs",
+      "sha256": "db42149dbed471187668073d4160459f63da4e045db76443474d209826b7ef3d",
+      "bytes": 26891
     },
     {
       "path": "app/server/util.mjs",
@@ -770,11 +839,6 @@
       "path": "app/shared/reasoning-effort.mjs",
       "sha256": "e6b3aeae05a8931f698e3653c5c49faa8357838bb9ae681bd8c4abd6ef53e1f7",
       "bytes": 8307
-    },
-    {
-      "path": "app/THIRD-PARTY-NOTICES.md",
-      "sha256": "f106d64a220a17e9e8c33e838664d40cfa7991288496760a65adc1e9c0e53a68",
-      "bytes": 6509
     },
     {
       "path": "app/third-party/ZCode-LICENSE.txt",

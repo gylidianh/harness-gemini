@@ -3,17 +3,43 @@
   "productName": "Harness Gemini",
   "copyright": "Harness Gemini",
   "electronVersion": "44.7.2",
-  "directories": { "app": "app", "output": "release" },
+  "directories": {
+    "app": "app",
+    "output": "release"
+  },
   "asar": true,
   "files": [
-    "desktop/**/*", "server/**/*", "shared/**/*", "dist/**/*",
-    "third-party/**/*", "build/icon.ico", "THIRD-PARTY-NOTICES.md", "package.json",
-    "!**/__pycache__/**", "!**/*.pyc", "!**/*.bak"
+    "desktop/**/*",
+    "server/**/*",
+    "shared/**/*",
+    "dist/**/*",
+    "third-party/**/*",
+    "build/icon.*",
+    "THIRD-PARTY-NOTICES.md",
+    "package.json",
+    "!**/__pycache__/**",
+    "!**/*.pyc",
+    "!**/*.bak"
   ],
-  "extraResources": [{ "from": "app/build/icon.ico", "to": "icon.ico" }],
-  "afterPack": "tools/after-pack.cjs",
+  "extraResources": [
+    {
+      "from": "app/build/icon.ico",
+      "to": "icon.ico"
+    },
+    {
+      "from": "app/build/icon.png",
+      "to": "icon.png"
+    }
+  ],
   "win": {
-    "target": [{ "target": "nsis", "arch": ["x64"] }],
+    "target": [
+      {
+        "target": "nsis",
+        "arch": [
+          "x64"
+        ]
+      }
+    ],
     "icon": "app/build/icon.ico",
     "signAndEditExecutable": false
   },
@@ -27,5 +53,6 @@
     "shortcutName": "Harness Gemini",
     "uninstallDisplayName": "Harness Gemini ${version}",
     "artifactName": "Harness-Gemini-${version}-win-x64.${ext}"
-  }
+  },
+  "afterPack": "tools/after-pack.cjs"
 }

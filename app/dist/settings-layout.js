@@ -2,9 +2,10 @@ import { useDialogFocus } from './dialog-focus.js';
 import { createProviderIcon, providerAppearance } from './model-selector.js';
 
 export const SETTINGS_SECTIONS = [
-  { id: 'settings-models', label: '供应商', detail: '模型连接 API 密钥 地址 模型', group: '人工智能', icon: 'connection' },
-  { id: 'settings-workspace', label: '工作区', detail: '工作目录 工具调用 上下文压缩', group: '工作台', icon: 'folder' },
+  { id: 'settings-models', label: '供应商', detail: '模型连接 API 密钥 地址 模型 请求头 额外请求体 代理 并发上限 每分钟请求数', group: '人工智能', icon: 'connection' },
+  { id: 'settings-workspace', label: '工作区', detail: '工作目录 全局代理 工具调用 上下文压缩 文件改动', group: '工作台', icon: 'folder' },
   { id: 'settings-reminders', label: '任务提醒', detail: '气泡提示音 系统通知', group: '工作台', icon: 'bell' },
+  { id: 'settings-usage', label: '用量统计', detail: 'Token 消耗量 模型趋势 活动热力图 统计', group: '工作台', icon: 'chart' },
   { id: 'settings-skills', label: '技能', detail: '技能目录 启用状态', group: '人工智能', icon: 'book' },
   { id: 'settings-appearance', label: '外观', detail: '界面皮肤 主题 颜色', group: '偏好设置', icon: 'palette' },
 ];
@@ -15,6 +16,7 @@ export function createSettingsLayout(React) {
   const paths = {
     connection: ['M4 5l6 6-6 6', 'M13 19h7'], folder: ['M3 7V5h6l2 2h10v12H3Z'],
     bell: ['M18 8a6 6 0 0 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9', 'M10 21h4'],
+    chart: ['M4 19V5', 'M4 19h16', 'M8 15v-4', 'M12 15V8', 'M16 15v-6', 'M20 15V6'],
     book: ['M12 5C9 3 5 3 3 4v15c3-1 6-1 9 1 3-2 6-2 9-1V4c-3-1-6-1-9 1Z', 'M12 5v15'],
     palette: ['M21 12a9 9 0 1 0-9 9h1a2 2 0 0 0 1-4 2 2 0 0 1 2-3h3a2 2 0 0 0 2-2Z', 'M7 8h.01M12 6h.01M17 8h.01M6 13h.01'],
   };

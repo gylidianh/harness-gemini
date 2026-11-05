@@ -47,7 +47,7 @@ const NO_HARD_LINK = new Set(['EISDIR', 'ENOTSUP', 'EPERM', 'EACCES', 'EXDEV', '
  * meanwhile is still never replaced), the verified bytes are copied in and flushed, and a target
  * this function created is removed again if the copy fails.
  */
-async function publishByCopy(temporary, destination, expectedBytes) {
+async function publishByCopy(temporary, destination, expectedBytes, signal) {
   let output;
   try { output = await fs.open(destination, 'wx', 0o600); }
   catch (error) {
@@ -63,11 +63,19 @@ async function publishByCopy(temporary, destination, expectedBytes) {
       for (;;) {
         const { bytesRead } = await input.read(buffer, 0, buffer.length, position);
         if (!bytesRead) break;
-        await output.write(buffer, 0, bytesRead, position);
+        // 1.5.6: FileHandle.write may write fewer bytes than requested.
+        let offset = 0;
+        while (offset < bytesRead) {
+          checkAbort(signal);
+          const { bytesWritten } = await output.write(buffer, offset, bytesRead - offset, position + offset);
+          if (!Number.isSafeInteger(bytesWritten) || bytesWritten <= 0 || bytesWritten > bytesRead - offset) throw new Error('下载文件复制未能完整写入，未保存目标文件。');
+          offset += bytesWritten;
+        }
         position += bytesRead;
       }
     } finally { await input.close(); }
-    if (position !== expectedBytes) throw new Error('下载文件复制不完整，未保存目标文件。');
+    if (position !== expectedBytes || (await output.stat()).size !== expectedBytes) throw new Error('下载文件复制不完整，未保存目标文件。');
+    checkAbort(signal);
     await output.sync();
     await output.close(); output = null;
   } catch (error) {
@@ -142,7 +150,7 @@ export async function downloadFile(args, { workspace, signal, access = {}, fetch
         if (!NO_HARD_LINK.has(error.code)) throw error;
         checkAbort(signal);
         await checkDestination();
-        await publishByCopy(temporary, checked.absolute, bytes);
+        await publishByCopy(temporary, checked.absolute, bytes, signal);
       }
     } else {
       for (let attempt = 0; ; attempt++) {

@@ -3,7 +3,10 @@ import { abortError, checkAbort, isObject, safeError } from './util.mjs';
 import { REASONING_BODY_FIELDS, reasoningRequestVariants } from '../shared/reasoning-effort.mjs';
 // Node's fetch applies a hidden 300s body watchdog of its own, which killed a thinking model's
 // reply mid-stream; this agent replaces it with the watchdogs defined below.
-import { streamDispatcher } from './http-agent.mjs';
+import { providerFetch, errorCauseChain, hasPermanentFailure } from './http-agent.mjs';
+// 1.4.8: a connection's own headers, extra body fields, proxy and limits.
+import { withExtraBody, withExtraHeaders } from './provider-extra.mjs';
+import { acquireConcurrency, takeRate } from './provider-limits.mjs';
 
 const MAX_RESPONSE = 64 * 1024 * 1024;
 const MAX_TOOL_ARGUMENTS = 256_000;
@@ -59,7 +62,8 @@ const SILENT_WINDOW_MAX = 600_000;
 // A dropped connection (a relay resetting the socket, "fetch failed", undici's "terminated") is a
 // different failure from a silent one: it is reported at once, so it gets its own, smaller budget
 // and a short back-off between attempts instead of being thrown straight at the reader.
-const TRANSPORT_RETRIES = 5;
+// 1.5.2: total attempts including the first one, i.e. 5 retries before giving up.
+const TRANSPORT_RETRIES = 6;
 const TRANSPORT_BACKOFF_MAX = 8_000;
 
 /** The protocols a connection can speak. Old profiles default to Chat Completions. */
@@ -180,13 +184,15 @@ function headers(settings, stream = false, protocol = 'chat') {
     'Content-Type': 'application/json',
     Accept: stream ? 'text/event-stream, application/json' : 'application/json',
   };
-  if (!settings.apiKey) return base;
+  if (!settings.apiKey) return withExtraHeaders(base, settings.headers, settings);
   // Anthropic and most Anthropic-compatible gateways read x-api-key; the Bearer
   // header is also sent because many local relays only understand that form.
   if (protocol === 'anthropic') {
-    return { ...base, 'x-api-key': settings.apiKey, 'anthropic-version': ANTHROPIC_VERSION, Authorization: `Bearer ${settings.apiKey}` };
+    return withExtraHeaders({ ...base, 'x-api-key': settings.apiKey, 'anthropic-version': ANTHROPIC_VERSION, Authorization: `Bearer ${settings.apiKey}` }, settings.headers, settings);
   }
-  return { ...base, Authorization: `Bearer ${settings.apiKey}` };
+  // 1.4.8: the connection's own headers are applied last, after the key, so a private
+  // gateway with its own auth scheme both keeps its place and can replace the Bearer form.
+  return withExtraHeaders({ ...base, Authorization: `Bearer ${settings.apiKey}` }, settings.headers, settings);
 }
 
 /**
@@ -613,9 +619,14 @@ async function chatCompletion({ settings, model, messages, tools, stream = true,
   };
   try {
     const url = endpointFor(settings.baseUrl, 'chat');
-    const request = payload => fetch(url, {
-      method: 'POST', headers: headers(settings, stream, 'chat'), body: JSON.stringify(payload), signal: timeout.signal, redirect: 'error', dispatcher: streamDispatcher,
-    });
+    // 1.4.8: every attempt goes through this connection's proxy, carries its extra headers,
+    // has its extra body fields merged in, and counts against its requests-a-minute limit.
+    const request = async payload => {
+      await takeRate(settings, timeout.signal);
+      return providerFetch(url, {
+        method: 'POST', headers: headers(settings, stream, 'chat'), body: JSON.stringify(withExtraBody(payload, settings)), signal: timeout.signal, redirect: 'error', 
+      }, settings);
+    };
     // Two optional things may be refused by an endpoint that otherwise accepts the request: the
     // usage report, and the reasoning spelling. The usage report is dropped once; the reasoning
     // field first falls back to a stricter spelling and only then is dropped, so a strict gateway
@@ -771,7 +782,10 @@ async function anthropicCompletion({ settings, model, messages, tools, stream = 
     max_tokens: maxTokensFor(thinking),
     messages: turns,
     stream,
-    ...(system ? { system } : {}),
+    // 1.5.0: Anthropic supports string and text-block system forms, but the tested AnyRouter
+    // gateway rejects our string form with 503. Use text blocks for relay compatibility;
+    // preserve the exact system text and ordering. No Claude Code identity/cloak is injected.
+    ...(system ? { system: [{ type: 'text', text: system }] } : {}),
     ...(requestTools.length ? { tools: requestTools } : {}),
     // 1.3.3: a request whose history holds tool_use blocks must define tools, so a turn that must
     // not call any (a sub-agent's last round) sends them with tool_choice none instead of none at all.
@@ -857,9 +871,13 @@ async function anthropicCompletion({ settings, model, messages, tools, stream = 
     if (packet?.type === 'message_stop') return 'done';
     return undefined;
   };
-  const send = payload => fetch(endpointFor(settings.baseUrl, 'anthropic'), {
-    method: 'POST', headers: headers(settings, stream, 'anthropic'), body: JSON.stringify(payload), signal: timeout.signal, redirect: 'error', dispatcher: streamDispatcher,
-  });
+  // 1.4.8: proxy, extra headers, extra body fields and the requests-a-minute limit, per attempt.
+  const send = async payload => {
+    await takeRate(settings, timeout.signal);
+    return providerFetch(endpointFor(settings.baseUrl, 'anthropic'), {
+      method: 'POST', headers: headers(settings, stream, 'anthropic'), body: JSON.stringify(withExtraBody(payload, settings)), signal: timeout.signal, redirect: 'error', 
+    }, settings);
+  };
   try {
     // The raised max_tokens exists only to leave room for a thinking budget, so it follows the
     // spelling being tried and returns to the standard ceiling when thinking is dropped.
@@ -1068,9 +1086,13 @@ async function responsesCompletion({ settings, model, messages, tools, stream = 
       return 'done';
     }
   };
-  const send = payload => fetch(endpointFor(settings.baseUrl, 'responses'), {
-    method: 'POST', headers: headers(settings, stream, 'responses'), body: JSON.stringify(payload), signal: timeout.signal, redirect: 'error', dispatcher: streamDispatcher,
-  });
+  // 1.4.8: proxy, extra headers, extra body fields and the requests-a-minute limit, per attempt.
+  const send = async payload => {
+    await takeRate(settings, timeout.signal);
+    return providerFetch(endpointFor(settings.baseUrl, 'responses'), {
+      method: 'POST', headers: headers(settings, stream, 'responses'), body: JSON.stringify(withExtraBody(payload, settings)), signal: timeout.signal, redirect: 'error', 
+    }, settings);
+  };
   try {
     const response = await sendWithReasoningFallback({
       body, variants: reasoningRequestVariants(settings.reasoningEffort, model, 'responses'), send, apiKey: settings.apiKey, signal, onNotice,
@@ -1129,10 +1151,9 @@ const TRANSPORT_MESSAGES = /(fetch failed|terminated|socket hang up|other side c
  * innermost cause, which is where undici puts the real reason ("fetch failed" alone says nothing).
  */
 export function transportFailure(error) {
-  const chain = [];
-  for (let current = error, depth = 0; current && typeof current === 'object' && depth < 5; depth++) {
-    chain.push(current); current = current.cause;
-  }
+  // 1.5.7: permanent proxy errors must not be reclassified by a generic fetch wrapper.
+  if (hasPermanentFailure(error)) return null;
+  const chain = errorCauseChain(error);
   const hit = chain.some(item => TRANSPORT_CODES.has(String(item.code ?? ''))
     || TRANSPORT_NAMES.has(String(item.name ?? ''))
     || TRANSPORT_MESSAGES.test(String(item.message ?? '')));
@@ -1167,7 +1188,7 @@ function interruptedError(message, { produced = false } = {}) {
 
 /** Whether a reply was cut off by a broken connection and can be continued from its text. */
 export function isInterrupted(error) {
-  if (!error) return false;
+  if (!error || hasPermanentFailure(error)) return false;
   if (error.transport === true || error.interrupted === true || error.partial === true) return true;
   // An answer with an HTTP status is a refusal, not a connection that broke mid-reply.
   if (Number.isInteger(error.status)) return false;
@@ -1248,6 +1269,25 @@ function completionError(error, { signal, timeout, key }) {
   const broken = error?.transport === true;
   // 1.3.3: a 400 whose body says "Unexpected end of JSON input" or "subscription terminated" came
   // back as an HTTP answer; matching its words as a socket failure replayed it five times.
+  const proxy = errorCauseChain(error).find(cause => cause.proxyFailure === true);
+  if (proxy) {
+    // 1.5.7: preserve the safe category and a chain's permanent veto through every wrapper.
+    const reported = new Error(safeError(proxy, key));
+    reported.proxyFailure = true;
+    if (proxy.proxyFailureKind) reported.proxyFailureKind = proxy.proxyFailureKind;
+    if (proxy.code) reported.code = String(proxy.code);
+    if (proxy.cause) reported.cause = proxy.cause;
+    if (hasPermanentFailure(error)) reported.permanent = true;
+    else { reported.transport = true; reported.retryable = true; }
+    return reported;
+  }
+  if (hasPermanentFailure(error)) {
+    const reported = new Error(safeError(error, key));
+    reported.permanent = true;
+    if (error.code) reported.code = String(error.code);
+    if (error.cause) reported.cause = error.cause;
+    return reported;
+  }
   const transport = broken || error?.retryable === true || Number.isInteger(error?.status) ? null : transportFailure(error);
   const reported = new Error(transport ? '与模型服务的网络连接中断：' + safeError(transport.message, key) : safeError(error, key));
   if (transport || broken) {
@@ -1299,6 +1339,8 @@ async function withOutputRetry(run, options) {
       });
     } catch (error) {
       if (options.signal?.aborted) throw abortError();
+      // Permanent auth/certificate failures veto all transport/HTTP/general retry flags.
+      if (hasPermanentFailure(error)) throw error;
       lastError = error;
       if (error?.transport === true) {
         // A broken socket is replayed as long as no answer text reached the reader. Reasoning
@@ -1307,11 +1349,11 @@ async function withOutputRetry(run, options) {
         transportFailures++;
         if (producedText) throw error;
         if (transportFailures >= transportAttempts) {
-          error.message = `${error.message}。已自动重试 ${transportFailures - 1} 次仍失败，请检查网络、代理或接口服务是否稳定后重试。`;
+          error.message = `${String(error.message ?? '').replace(/[。.]+$/, '')}。已自动重试 ${transportFailures - 1} 次仍失败，请检查网络、代理或接口服务是否稳定后重试。`;
           throw error;
         }
         // 1.3.3-fix2: every kind of retry shares one attempt budget; the last one still explains itself.
-        if (attempt >= attempts) { error.message = `${error.message}。已自动重试 ${attempt - 1} 次仍失败，请检查网络、代理或接口服务是否稳定后重试。`; throw error; }
+        if (attempt >= attempts) { error.message = `${String(error.message ?? '').replace(/[。.]+$/, '')}。已自动重试 ${attempt - 1} 次仍失败，请检查网络、代理或接口服务是否稳定后重试。`; throw error; }
         await options.onRetry?.({ attempt: transportFailures, attempts: transportAttempts, error: safeError(error, options.settings?.apiKey), transport: true });
         await pause(Math.min(1_000 * 2 ** (transportFailures - 1), TRANSPORT_BACKOFF_MAX), options.signal);
         if (options.signal?.aborted) throw abortError();
@@ -1371,7 +1413,13 @@ export async function completion(options) {
   if (!options.settings.baseUrl || !options.model) throw new Error('请先在设置中填写 API 地址和模型名称。');
   const protocol = protocolOf(options.settings);
   const run = protocol === 'anthropic' ? anthropicCompletion : protocol === 'responses' ? responsesCompletion : chatCompletion;
-  return withOutputRetry(run, options);
+  // 1.4.8: a connection may cap how many requests are out at the vendor at once. The slot is
+  // held for the whole request (retries and the streaming read included) and a request over
+  // the limit waits its turn instead of failing.
+  const release = await acquireConcurrency(options.settings, options.signal);
+  try {
+    return await withOutputRetry(run, options);
+  } finally { release(); }
 }
 
 export async function listModels(settings, signal) {
@@ -1379,7 +1427,8 @@ export async function listModels(settings, signal) {
   const protocol = protocolOf(settings);
   const timeout = requestSignal(signal, { idle: 20_000, absolute: 20_000 });
   try {
-    const response = await fetch(modelsEndpoint(settings.baseUrl, protocol), { headers: headers(settings, false, protocol), signal: timeout.signal, redirect: 'error' });
+    // 1.4.8: the model list goes out the same way a reply does: this connection's proxy and headers.
+    const response = await providerFetch(modelsEndpoint(settings.baseUrl, protocol), { headers: headers(settings, false, protocol), signal: timeout.signal, redirect: 'error', }, settings);
     if (!response.ok) throw await upstreamError(response, settings.apiKey);
     const body = JSON.parse(await responseText(response, 4 * 1024 * 1024));
     const values = Array.isArray(body?.data) ? body.data : Array.isArray(body?.models) ? body.models : isObject(body?.models) ? Object.keys(body.models) : [];

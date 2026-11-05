@@ -2,9 +2,11 @@
 import { promises as fs } from 'node:fs';
 import path from 'node:path';
 import { DEFAULT_CONTEXT_WINDOW, MAX_CONTEXT_WINDOW, MIN_CONTEXT_WINDOW, isValidContextWindow } from './context.mjs';
-import { atomicWrite, boundedString, HttpError, isObject, readJson, requireObject } from './util.mjs';
+import { atomicWrite, boundedString, HttpError, isObject, readJson, requireObject, safeError } from './util.mjs';
 import { identityCodec, isSealedSecret } from './secret.mjs';
 import { isReasoningLevel, storedReasoningLevel } from '../shared/reasoning-effort.mjs';
+// 1.4.8: a connection's advanced options are validated here, where they are saved.
+import { MAX_CONCURRENCY, MAX_RPM, PROXY_MODES, normalizeExtraBodyText, normalizeHeaders, normalizeLimit, normalizeProxyMode, normalizeProxyUrl } from './provider-extra.mjs';
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const CORRUPT_SESSION_TEXT = '这个会话文件已损坏，无法打开；可以在侧边栏直接将它删除。';
@@ -51,9 +53,9 @@ const MODEL_FIELDS = ['chatModel', 'agentModel', 'imageModel'];
 /** The wire format one connection speaks. Chat Completions stays the default for old profiles. */
 export const API_PROTOCOLS = ['chat', 'anthropic', 'responses'];
 const PROTOCOLS = new Set(API_PROTOCOLS);
-const CONNECTION_FIELDS = ['protocol', 'baseUrl', ...MODEL_FIELDS, 'contextWindow', 'reasoningEffort', 'apiKey', 'clearApiKey', 'clearKey'];
+const CONNECTION_FIELDS = ['protocol', 'baseUrl', ...MODEL_FIELDS, 'contextWindow', 'reasoningEffort', 'apiKey', 'clearApiKey', 'clearKey', 'headers', 'extraBody', 'proxyMode', 'proxyUrl', 'maxConcurrency', 'maxRpm'];
 const COMPLETION_FIELDS = ['completionSound', 'completionNotification'];
-const COMPACTION_FIELDS = ['autoCompact'];
+const COMPACTION_FIELDS = ['autoCompact', 'fileChangesEnabled'];
 /**
  * Interface skins: the shipped white Gemini look, the Gemini dark look, the Claude orange look,
  * and the gilded pair 鎏金黑 (dark) and 象牙金 (light). Must match the ids in `src/skins.js`.
@@ -92,6 +94,13 @@ function connectionFields(profile) {
     // The user's choice, kept independently of the chat model. Each request checks it against
     // its own model, so a model without reasoning control still never receives the field.
     reasoningEffort: storedReasoningLevel(profile.reasoningEffort),
+    // 1.4.8: the advanced options, kept per connection and applied to every request it makes.
+    headers: normalizeHeaders(profile.headers),
+    extraBody: normalizeExtraBodyText(profile.extraBody),
+    proxyMode: normalizeProxyMode(profile.proxyMode),
+    proxyUrl: normalizeProxyUrl(profile.proxyUrl),
+    maxConcurrency: normalizeLimit(profile.maxConcurrency, MAX_CONCURRENCY),
+    maxRpm: normalizeLimit(profile.maxRpm, MAX_RPM),
     apiKey: profile.apiKey,
   };
 }
@@ -110,11 +119,13 @@ function persistedSettings(settings) {
     workspace: settings.workspace, maxToolRounds: settings.maxToolRounds, approvalMode: settings.approvalMode,
     completionSound: settings.completionSound, completionNotification: settings.completionNotification,
     autoCompact: settings.autoCompact,
+    fileChangesEnabled: settings.fileChangesEnabled ?? true,
+    globalProxyUrl: settings.globalProxyUrl ?? '',
     skin: settings.skin ?? 'classic',
   };
 }
 
-function normalizeConnection(update, previous, { migrateAgentModel = false } = {}) {
+function normalizeConnection(update, previous, { migrateAgentModel = false, tolerant = false } = {}) {
   const next = { ...previous };
   if ('protocol' in update) {
     if (!PROTOCOLS.has(update.protocol)) throw new HttpError(400, 'API 协议必须是 chat、anthropic 或 responses。');
@@ -146,6 +157,19 @@ function normalizeConnection(update, previous, { migrateAgentModel = false } = {
       if (!previous.apiKey || typed !== maskApiKey(previous.apiKey)) throw new HttpError(400, 'API 密钥框中是已保存密钥的掩码，不是完整密钥；请粘贴完整的 API 密钥，或点“显示”后再修改。');
     } else if (typed) next.apiKey = typed;
   }
+  // 1.4.8: the advanced options are checked where they are typed, so a bad header name, a
+  // broken JSON body or an out-of-range limit is refused by the dialog that sent it instead of
+  // failing the next request with the vendor.
+  if ('headers' in update) next.headers = normalizeHeaders(update.headers, { strict: !tolerant });
+  if ('extraBody' in update) next.extraBody = normalizeExtraBodyText(update.extraBody, { strict: !tolerant });
+  if ('proxyMode' in update) {
+    if (PROXY_MODES.includes(update.proxyMode)) next.proxyMode = update.proxyMode;
+    else if (!tolerant) throw new HttpError(400, '代理必须是 global、direct 或 custom。');
+  }
+  if ('proxyUrl' in update) next.proxyUrl = normalizeProxyUrl(update.proxyUrl, { strict: !tolerant, label: '代理地址' });
+  if ('maxConcurrency' in update) next.maxConcurrency = normalizeLimit(update.maxConcurrency, MAX_CONCURRENCY, '并发上限', { strict: !tolerant });
+  if ('maxRpm' in update) next.maxRpm = normalizeLimit(update.maxRpm, MAX_RPM, '每分钟请求数', { strict: !tolerant });
+  if (!tolerant && next.proxyMode === 'custom' && !next.proxyUrl) throw new HttpError(400, '选择“自定义”代理时，请填写代理地址。');
   if ('reasoningEffort' in update) {
     const requested = update.reasoningEffort;
     if (requested === undefined || requested === null || requested === '') next.reasoningEffort = '';
@@ -182,6 +206,10 @@ export function publicSettings(settings) {
       agentModel: profile.agentModel, imageModel: profile.imageModel,
       contextWindow: profile.contextWindow ?? DEFAULT_CONTEXT_WINDOW,
       reasoningEffort: profile.reasoningEffort ?? '', apiKeySet: Boolean(profile.apiKey),
+      // 1.4.8: the advanced options travel with the connection, so the dialog can show them.
+      headers: profile.headers ?? [], extraBody: profile.extraBody ?? '',
+      proxyMode: profile.proxyMode ?? 'global', proxyUrl: profile.proxyUrl ?? '',
+      maxConcurrency: profile.maxConcurrency ?? 0, maxRpm: profile.maxRpm ?? 0,
       // 1.3.4: only a mask. The editor asks the desktop bridge for the full key when the user
       // presses "显示", so no other local process can read keys through this API.
       apiKey: maskApiKey(profile.apiKey),
@@ -189,6 +217,8 @@ export function publicSettings(settings) {
     activeProfileId: settings.activeProfileId, approvalMode: settings.approvalMode ?? 'ask',
     completionSound: settings.completionSound ?? true, completionNotification: settings.completionNotification ?? true,
     autoCompact: settings.autoCompact ?? true,
+    fileChangesEnabled: settings.fileChangesEnabled ?? true,
+    globalProxyUrl: settings.globalProxyUrl ?? '',
     skin: SKINS.has(settings.skin) ? settings.skin : 'classic',
   };
 }
@@ -201,6 +231,9 @@ export function resolveConnectionSettings(settings, requestedProfileId) {
   return {
     ...connectionFields(selected), workspace: settings.workspace, maxToolRounds: settings.maxToolRounds,
     approvalMode: settings.approvalMode ?? 'ask', autoCompact: settings.autoCompact ?? true,
+    fileChangesEnabled: settings.fileChangesEnabled ?? true,
+    // 1.4.8: the app-wide proxy a connection follows when it has none of its own.
+    globalProxyUrl: settings.globalProxyUrl ?? '',
     profileId: selected.id, profileName: selected.name, activeProfileId: selected.id,
   };
 }
@@ -227,6 +260,9 @@ export class Store {
     this.metaQueue = Promise.resolve();
     this.sessionMeta = {};
     this.sessionQueues = new Map();
+    this.deletionQueues = new Map();
+    this.deletingSessions = new Set();
+    this.deletedSessions = new Set();
   }
 
   async init() {
@@ -234,8 +270,8 @@ export class Store {
     this.startupProblems = [];
     this.unreadableKeys = new Map();
     await Promise.all([this.dataDir, this.sessionDir, this.deletedDir, this.artifactDir, this.defaultWorkspace].map(directory => fs.mkdir(directory, { recursive: true, mode: 0o700 })));
-    const defaultProfile = { id: randomUUID(), name: '默认连接', protocol: 'chat', baseUrl: '', chatModel: '', agentModel: '', imageModel: '', contextWindow: DEFAULT_CONTEXT_WINDOW, reasoningEffort: '', apiKey: '' };
-    const initial = activateProfile({ profiles: [defaultProfile], activeProfileId: defaultProfile.id, workspace: this.defaultWorkspace, maxToolRounds: 0, approvalMode: 'ask', completionSound: true, completionNotification: true, autoCompact: true });
+    const defaultProfile = { id: randomUUID(), name: '默认连接', protocol: 'chat', baseUrl: '', chatModel: '', agentModel: '', imageModel: '', contextWindow: DEFAULT_CONTEXT_WINDOW, reasoningEffort: '', headers: [], extraBody: '', proxyMode: 'global', proxyUrl: '', maxConcurrency: 0, maxRpm: 0, apiKey: '' };
+    const initial = activateProfile({ profiles: [defaultProfile], activeProfileId: defaultProfile.id, workspace: this.defaultWorkspace, maxToolRounds: 0, approvalMode: 'ask', completionSound: true, completionNotification: true, autoCompact: true, fileChangesEnabled: true, globalProxyUrl: '' });
     const { saved, recovered } = await this.loadSavedSettings();
     // 1.3.3: the stored (sealed) form is never validated as if it were the key itself. A sealed key
     // is longer than the key, so a key saved near the length limit used to stop the next start-up.
@@ -269,7 +305,7 @@ export class Store {
         if (!UUID.test(k) || !isObject(v)) continue;
         const pinned = Boolean(v.pinned);
         const locked = Boolean(v.locked);
-        if (!pinned && !locked) continue;
+        // 1.5.6: explicit false entries override stale flags in legacy session JSON.
         this.sessionMeta[k.toLowerCase()] = {
           pinned,
           pinnedAt: pinned && typeof v.pinnedAt === 'string' ? v.pinnedAt : null,
@@ -405,7 +441,7 @@ export class Store {
   needsRecovery(bytes) {
     const text = bytes.toString('utf8');
     return text.includes('"running"') || text.includes('"pending"') || text.includes('"streaming"')
-      || text.includes('"compaction"') || !text.includes('"workspace"');
+      || text.includes('"compaction"') || text.includes('"pinned"') || text.includes('"locked"') || !text.includes('"workspace"');
   }
 
   async recoverInterruptedSessions() {
@@ -435,6 +471,18 @@ export class Store {
       if (!isObject(session) || !Array.isArray(session.messages)) continue;
       try {
       let changed = false;
+      // 1.5.6: migrate legacy flags once, then metadata is the only authority.
+      const metaKey = String(session.id).toLowerCase();
+      if (UUID.test(metaKey) && !(metaKey in this.sessionMeta) && (session.pinned || session.locked)) {
+        const entry = {
+          pinned: Boolean(session.pinned), pinnedAt: session.pinned ? (session.pinnedAt ?? null) : null,
+          locked: Boolean(session.locked), lockedAt: session.locked ? (session.lockedAt ?? null) : null,
+        };
+        await this.writeSessionMeta(meta => ({ next: { ...meta, [metaKey]: entry } }));
+      }
+      for (const field of ['pinned', 'pinnedAt', 'locked', 'lockedAt']) {
+        if (field in session) { delete session[field]; changed = true; }
+      }
       // Sessions saved before per-session workspaces adopt their own directory here, while no run is active.
       if (typeof session.workspace !== 'string' || !path.isAbsolute(session.workspace)) {
         session.workspace = this.sessionWorkspacePath(session.id);
@@ -442,7 +490,7 @@ export class Store {
       }
       // A compaction record must reference a message that still exists; otherwise the
       // conversation would silently lose the history it was told to keep.
-      if (session.compaction && !this.compactionBoundary(session)) {
+      if (session.compaction && this.compactionBoundary(session) < 0) {
         delete session.compaction;
         changed = true;
       }
@@ -481,6 +529,8 @@ export class Store {
       workspace: previous.workspace, maxToolRounds: previous.maxToolRounds, approvalMode: previous.approvalMode ?? 'ask',
       completionSound: previous.completionSound ?? true, completionNotification: previous.completionNotification ?? true,
       autoCompact: previous.autoCompact ?? true,
+      fileChangesEnabled: previous.fileChangesEnabled ?? true,
+      globalProxyUrl: previous.globalProxyUrl ?? '',
       skin: SKINS.has(previous.skin) ? previous.skin : 'classic',
     };
     if ('profiles' in update) {
@@ -495,7 +545,7 @@ export class Store {
         const existing = previousProfiles.get(id);
         const name = boundedString('name' in item ? item.name : existing?.name, '连接名称', { max: 80 }).trim();
         const defaults = existing ?? { protocol: 'chat', baseUrl: '', chatModel: '', agentModel: '', imageModel: '', contextWindow: DEFAULT_CONTEXT_WINDOW, reasoningEffort: '', apiKey: '' };
-        return { id, name, ...connectionFields(normalizeConnection(item, defaults, { migrateAgentModel })) };
+        return { id, name, ...connectionFields(normalizeConnection(item, defaults, { migrateAgentModel, tolerant: loading })) };
       });
     }
     if ('activeProfileId' in update) next.activeProfileId = profileId(update.activeProfileId);
@@ -503,7 +553,7 @@ export class Store {
     if (activeIndex < 0) throw new HttpError(400, '活动连接不存在；删除它时请同时选择另一个连接。');
     // Full profile lists are authoritative; old flat clients update only their active profile.
     if (!('profiles' in update) && CONNECTION_FIELDS.some(field => field in update)) {
-      next.profiles[activeIndex] = normalizeConnection(update, next.profiles[activeIndex], { migrateAgentModel });
+      next.profiles[activeIndex] = normalizeConnection(update, next.profiles[activeIndex], { migrateAgentModel, tolerant: loading });
     }
     if (!loading && ('profiles' in update || MODEL_FIELDS.some(field => field in update))) {
       const incomplete = next.profiles.find(profile => !MODEL_FIELDS.some(field => Boolean(profile[field])));
@@ -531,6 +581,13 @@ export class Store {
       if (!(field in update)) continue;
       if (typeof update[field] !== 'boolean') throw new HttpError(400, `${field} 必须是布尔值。`);
       next[field] = update[field];
+    }
+    if ('fileChanges' in update && !('fileChangesEnabled' in update)) {
+      if (typeof update.fileChanges !== 'boolean') throw new HttpError(400, 'fileChanges 必须是布尔值。');
+      next.fileChangesEnabled = update.fileChanges;
+    }
+    if ('globalProxyUrl' in update) {
+      next.globalProxyUrl = normalizeProxyUrl(update.globalProxyUrl, { strict: true, label: '全局代理地址' });
     }
     if ('skin' in update) {
       // A value written by another build must never stop the app from starting: while loading
@@ -628,23 +685,16 @@ export class Store {
 
   withSessionMeta(session) {
     if (!isObject(session)) return session;
-    const meta = this.getSessionMeta(session.id);
-    const pinned = meta.pinned || Boolean(session.pinned);
-    const locked = meta.locked || Boolean(session.locked);
-    return {
-      ...session,
-      pinned,
-      pinnedAt: pinned ? (meta.pinnedAt ?? session.pinnedAt ?? null) : null,
-      locked,
-      lockedAt: locked ? (meta.lockedAt ?? session.lockedAt ?? null) : null,
-    };
+    return { ...session, ...this.getSessionMeta(session.id) };
   }
 
-  writeSessionMeta(next = this.sessionMeta) {
-    const snapshot = JSON.stringify(next, null, 2);
+  // 1.5.6: compute each change inside the queue, from the preceding successful write.
+  writeSessionMeta(change = meta => ({ next: meta })) {
     const operation = this.metaQueue.then(async () => {
-      await atomicWrite(this.sessionMetaFile, snapshot);
+      const { next, result } = change(this.sessionMeta);
+      await atomicWrite(this.sessionMetaFile, JSON.stringify(next, null, 2));
       this.sessionMeta = next;
+      return result;
     });
     this.metaQueue = operation.catch(() => {});
     return operation;
@@ -654,25 +704,29 @@ export class Store {
     requireObject(patch);
     const file = this.sessionFile(id);
     const key = id.toLowerCase();
-    const exists = await fs.access(file).then(() => true, () => false);
-    if (!exists) throw new HttpError(404, '会话不存在。');
     if ('pinned' in patch && typeof patch.pinned !== 'boolean') throw new HttpError(400, 'pinned 必须是布尔值。');
     if ('locked' in patch && typeof patch.locked !== 'boolean') throw new HttpError(400, 'locked 必须是布尔值。');
-    const prev = this.getSessionMeta(key);
-    const now = new Date().toISOString();
-    const pinned = 'pinned' in patch ? patch.pinned : prev.pinned;
-    const locked = 'locked' in patch ? patch.locked : prev.locked;
-    const entry = {
-      pinned,
-      pinnedAt: pinned ? (prev.pinned && prev.pinnedAt ? prev.pinnedAt : now) : null,
-      locked,
-      lockedAt: locked ? (prev.locked && prev.lockedAt ? prev.lockedAt : now) : null,
-    };
-    const nextMeta = { ...this.sessionMeta };
-    if (entry.pinned || entry.locked) nextMeta[key] = entry;
-    else delete nextMeta[key];
-    await this.writeSessionMeta(nextMeta);
-    return { id: key, ...entry };
+    const flags = { ...patch };
+    // Check existence and calculate the patch in the same serialized metadata operation.
+    const operation = this.metaQueue.then(async () => {
+      if (this.deletingSessions.has(key) || this.deletedSessions.has(key)) throw new HttpError(409, '此会话正在删除或已经删除。');
+      const exists = await fs.access(file).then(() => true, () => false);
+      if (!exists) throw new HttpError(404, '会话不存在。');
+      const prev = this.getSessionMeta(key);
+      const now = new Date().toISOString();
+      const pinned = 'pinned' in flags ? flags.pinned : prev.pinned;
+      const locked = 'locked' in flags ? flags.locked : prev.locked;
+      const entry = {
+        pinned, pinnedAt: pinned ? (prev.pinned && prev.pinnedAt ? prev.pinnedAt : now) : null,
+        locked, lockedAt: locked ? (prev.locked && prev.lockedAt ? prev.lockedAt : now) : null,
+      };
+      const next = { ...this.sessionMeta, [key]: entry };
+      await atomicWrite(this.sessionMetaFile, JSON.stringify(next, null, 2));
+      this.sessionMeta = next;
+      return { id: key, ...entry };
+    });
+    this.metaQueue = operation.catch(() => {});
+    return operation;
   }
 
   sortSessionSummaries(sessions) {
@@ -714,8 +768,11 @@ export class Store {
   saveSession(session) {
     const filename = this.sessionFile(session.id);
     const key = String(session.id).toLowerCase();
-    const snapshot = JSON.stringify(session, null, 2);
+    // Pin/lock state belongs to session-meta.json, not a live run's stale snapshot.
+    const { pinned, pinnedAt, locked, lockedAt, ...record } = session;
+    const snapshot = JSON.stringify(record, null, 2);
     const previous = this.sessionQueues.get(key) ?? Promise.resolve();
+    if (this.deletingSessions.has(key) || this.deletedSessions.has(key)) return Promise.reject(new HttpError(409, '此会话正在删除或已经删除，未重新保存。'));
     const operation = previous.catch(() => {}).then(() => atomicWrite(filename, snapshot));
     this.sessionQueues.set(key, operation);
     operation.finally(() => { if (this.sessionQueues.get(key) === operation) this.sessionQueues.delete(key); }).catch(() => {});
@@ -746,135 +803,223 @@ export class Store {
       }
       const text = value => (typeof value === 'string' && value ? value : null);
       const updatedAt = text(session.updatedAt) ?? text(session.createdAt) ?? await fallbackTime();
-      const pinned = meta.pinned || Boolean(session.pinned);
-      const locked = meta.locked || Boolean(session.locked);
+      const pinned = meta.pinned;
+      const locked = meta.locked;
       return {
         id, title: typeof session.title === 'string' ? session.title : '新对话',
         createdAt: text(session.createdAt) ?? updatedAt, updatedAt,
         messageCount: Array.isArray(session.messages) ? session.messages.length : 0,
         pinned,
-        pinnedAt: pinned ? (meta.pinnedAt ?? session.pinnedAt ?? null) : null,
+        pinnedAt: meta.pinnedAt,
         locked,
-        lockedAt: locked ? (meta.lockedAt ?? session.lockedAt ?? null) : null,
+        lockedAt: meta.lockedAt,
       };
     }));
     return this.sortSessionSummaries(sessions);
   }
 
-  /**
-   * 1.4.2: permanently remove a conversation and all of its associated data:
-   *  - session JSON record (and any .corrupt-* or deleted-sessions archive copies)
-   *  - session-exclusive workspace directory (files, downloads, uploaded attachments, .harness state)
-   *  - generated image / screenshot artifacts referenced by this session
-   *  - session-meta (pin/lock) and lastSessionId pointer
-   */
-  async deleteSession(id, { force = false } = {}) {
-    const file = this.sessionFile(id);
-    const key = id.toLowerCase();
-    if (!force && this.isSessionLocked(key)) {
-      throw new HttpError(423, '此会话已锁定，请先解锁后再删除。');
-    }
-    await (this.sessionQueues.get(key) ?? Promise.resolve());
-    let session = null;
-    try {
-      session = await this.getSession(key);
-    } catch (error) {
-      if (error?.status !== 422) throw error;
-    }
-
-    // 1. Remove primary session JSON file
-    await fs.unlink(file).catch(error => {
-      if (error?.code === 'ENOENT') throw new HttpError(404, '会话不存在。');
-      throw error;
-    });
-
-    // 2. Remove any corrupt/archived copies in sessions/ and deleted-sessions/
-    for (const dir of [this.sessionDir, this.deletedDir]) {
-      const entries = await fs.readdir(dir).catch(() => []);
-      for (const name of entries) {
-        const lower = name.toLowerCase();
-        if (lower === `${key}.json` || lower.startsWith(`${key}.corrupt-`)) {
-          await fs.unlink(path.join(dir, name)).catch(() => {});
-        }
-      }
-    }
-
-    // 3. Remove session's dedicated workspace directory (including attachments/ and .harness/)
-    const workspaceCandidates = new Set([
-      this.sessionWorkspacePath(key),
-      this.sessionWorkspacePath(key, this.defaultWorkspace),
-    ]);
-    if (typeof session?.workspace === 'string' && path.isAbsolute(session.workspace)) {
-      workspaceCandidates.add(path.resolve(session.workspace));
-    }
-    for (const dir of workspaceCandidates) {
-      if (isSafeSessionWorkspaceDir(dir, key)) {
-        await fs.rm(dir, { recursive: true, force: true }).catch(() => {});
-      }
-    }
-
-    // 4. Remove artifacts belonging to this session (unless referenced by another existing session)
-    const artifactNames = extractArtifactNamesFromSession(session);
-    if (artifactNames.size > 0) {
-      const remainingFiles = await fs.readdir(this.sessionDir).catch(() => []);
-      for (const name of remainingFiles) {
-        if (!name.endsWith('.json') || name.slice(0, -5).toLowerCase() === key) continue;
-        const raw = await fs.readFile(path.join(this.sessionDir, name), 'utf8').catch(() => '');
-        if (!raw) continue;
-        for (const artName of [...artifactNames]) {
-          if (raw.toLowerCase().includes(artName)) artifactNames.delete(artName);
-        }
-        if (artifactNames.size === 0) break;
-      }
-      for (const artName of artifactNames) {
-        if (ARTIFACT_FILE_RE.test(artName)) {
-          await fs.unlink(path.join(this.artifactDir, artName)).catch(() => {});
-        }
-      }
-    }
-
-    // 5. Clear state pointer & metadata
-    if (this.lastSessionId === key) await this.forgetSession();
-    if (key in this.sessionMeta) {
-      const nextMeta = { ...this.sessionMeta };
-      delete nextMeta[key];
-      await this.writeSessionMeta(nextMeta);
-    }
-    return { deleted: true, id: key, dataRemoved: true };
+  /** Durable cleanup receipts contain paths/identifiers only, never conversation text. */
+  cleanupFile(id) {
+    this.sessionFile(id); // validate before joining paths
+    return path.join(this.dataDir, 'session-cleanup', `${id.toLowerCase()}.json`);
   }
 
-  async deleteAllSessions({ includePinned = true, excludeIds = [] } = {}) {
+  async readCleanup(id) {
+    const record = await readJson(this.cleanupFile(id), null);
+    if (record === null) return null;
+    if (!isObject(record) || record.version !== 1 || record.id !== id.toLowerCase()
+      || !Array.isArray(record.workspaces) || record.workspaces.some(dir => !isSafeSessionWorkspaceDir(dir, id))
+      || !Array.isArray(record.artifacts) || record.artifacts.some(name => typeof name !== 'string' || !ARTIFACT_FILE_RE.test(name))) {
+      throw new HttpError(422, '删除清理记录损坏；为保护其他文件，未继续删除。');
+    }
+    return record;
+  }
+
+  async pendingCleanupIds() {
+    let names;
+    try { names = await fs.readdir(path.join(this.dataDir, 'session-cleanup')); }
+    catch (error) { if (error.code === 'ENOENT') return []; throw error; }
+    const ids = [];
+    for (const name of names) {
+      if (!name.endsWith('.json') || !UUID.test(name.slice(0, -5))) continue;
+      const id = name.slice(0, -5).toLowerCase();
+      try { if (!(await this.readCleanup(id))?.complete) ids.push(id); }
+      catch { ids.push(id); } // retry reports the damaged receipt instead of hiding it
+    }
+    return ids;
+  }
+
+  /**
+   * A primary unlink is the deletion commit. Everything after it is reported as
+   * cleanup, never thrown as if the conversation were still present. Save the
+   * cleanup recipe BEFORE that commit, so missing JSON/restarts remain retryable.
+   */
+  deleteSession(id, { force = false, removeFileChanges = null } = {}) {
+    this.sessionFile(id);
+    const key = id.toLowerCase();
+    if (this.deletionQueues.has(key)) return this.deletionQueues.get(key);
+    this.deletingSessions.add(key);
+    const operation = this.performSessionDeletion(key, { force, removeFileChanges });
+    this.deletionQueues.set(key, operation);
+    operation.finally(() => {
+      this.deletingSessions.delete(key);
+      if (this.deletionQueues.get(key) === operation) this.deletionQueues.delete(key);
+    }).catch(() => {});
+    return operation;
+  }
+
+  async performSessionDeletion(key, { force, removeFileChanges }) {
+    await this.metaQueue;
+    if (!force && this.isSessionLocked(key)) throw new HttpError(423, '此会话已锁定，请先解锁后再删除。');
+    await (this.sessionQueues.get(key) ?? Promise.resolve()).catch(() => {});
+    const file = this.sessionFile(key);
+    let session = null;
+    let missing = false;
+    let unreadableArtifacts = false;
+    try { session = await readJson(file, null); missing = session === null && !(await fs.lstat(file).catch(error => { if (error.code === 'ENOENT') return null; throw error; })); }
+    catch (error) { if (!(error instanceof SyntaxError)) throw error; unreadableArtifacts = true; }
+    let receipt = await this.readCleanup(key);
+    const retriedCleanup = Boolean(receipt);
+    if (!receipt && missing) throw new HttpError(404, '会话不存在，也没有可重试的删除清理记录。');
+    // If the first unlink failed, the live session may have changed since then.
+    // Merge a fresh recipe before committing; never trust stale artifact/workspace lists.
+    if (!missing) {
+      const workspaces = new Set([...(receipt?.workspaces ?? []),
+        this.sessionWorkspacePath(key), this.sessionWorkspacePath(key, this.defaultWorkspace),
+      ]);
+      if (typeof session?.workspace === 'string' && path.isAbsolute(session.workspace)) workspaces.add(path.resolve(session.workspace));
+      let artifacts;
+      try { artifacts = [...extractArtifactNamesFromSession(session)]; }
+      catch { artifacts = []; unreadableArtifacts = true; }
+      receipt = {
+        version: 1, id: key, createdAt: receipt?.createdAt ?? new Date().toISOString(), complete: false,
+        workspaces: [...workspaces].filter(dir => isSafeSessionWorkspaceDir(dir, key)),
+        artifacts: [...new Set([...(receipt?.artifacts ?? []), ...artifacts])],
+        unreadableArtifacts: Boolean(receipt?.unreadableArtifacts) || unreadableArtifacts || !isObject(session) || !Array.isArray(session.messages),
+      };
+      // Failure here is a pre-commit failure: leave the primary record intact.
+      await atomicWrite(this.cleanupFile(key), JSON.stringify(receipt, null, 2));
+    }
+    const failures = [];
+    const attempt = async (stage, target, action) => {
+      try { await action(); return true; }
+      catch (error) {
+        failures.push({ stage, path: target, code: error?.code ?? error?.status ?? null, message: safeError(error) });
+        return false;
+      }
+    };
+    if (!missing) {
+      const unlinked = await attempt('session-record', file, async () => {
+        try { await fs.unlink(file); }
+        catch (error) { if (error.code !== 'ENOENT') throw error; }
+      });
+      if (!unlinked) return { deleted: false, recordDeleted: false, id: key, dataRemoved: false, cleanupComplete: false, partial: false, retriedCleanup, failures, cleanupFailures: [], retryable: true };
+    }
+    this.deletedSessions.add(key);
+    // No unhandled post-commit filesystem/metadata error may turn this into HTTP 500.
+    for (const directory of [this.sessionDir, this.deletedDir]) {
+      await attempt('archive', directory, async () => {
+        let names;
+        try { names = await fs.readdir(directory); }
+        catch (error) { if (error.code === 'ENOENT') return; throw error; }
+        for (const name of names) {
+          const lower = name.toLowerCase();
+          if (lower === `${key}.json` || lower.startsWith(`${key}.json.corrupt-`) || lower.startsWith(`${key}.corrupt-`)) {
+            await attempt('archive', path.join(directory, name), () => fs.rm(path.join(directory, name), { force: true }));
+          }
+        }
+      });
+    }
+    for (const directory of receipt.workspaces) {
+      await attempt('workspace', directory, async () => {
+        await fs.rm(directory, { recursive: true, force: true, maxRetries: 3, retryDelay: 100 });
+        try { await fs.lstat(directory); }
+        catch (error) { if (error.code === 'ENOENT') return; throw error; }
+        throw new Error('删除后工作目录仍然存在。');
+      });
+    }
+    if (receipt.unreadableArtifacts) failures.push({ stage: 'artifact-discovery', path: file, code: 'UNREADABLE_RECORD', message: '原会话内容损坏，无法确认其关联图片；未盲目删除其他会话的图片。' });
+    if (receipt.artifacts.length) {
+      await attempt('artifact-references', this.sessionDir, async () => {
+        // An unreadable remaining record is NOT evidence that a picture is unshared.
+        const shared = new Set();
+        const names = await fs.readdir(this.sessionDir);
+        for (const name of names) {
+          if (!name.endsWith('.json') || !UUID.test(name.slice(0, -5)) || name.slice(0, -5).toLowerCase() === key) continue;
+          let raw;
+          try { raw = (await fs.readFile(path.join(this.sessionDir, name), 'utf8')).toLowerCase(); }
+          catch (error) { if (error.code === 'ENOENT') continue; throw error; }
+          for (const artifact of receipt.artifacts) if (raw.includes(artifact.toLowerCase())) shared.add(artifact);
+        }
+        for (const artifact of receipt.artifacts) if (!shared.has(artifact)) {
+          await attempt('artifact', path.join(this.artifactDir, artifact), () => fs.rm(path.join(this.artifactDir, artifact), { force: true }));
+        }
+      });
+    }
+    await attempt('file-changes', path.join(this.dataDir, 'file-changes', key), async () => {
+      if (removeFileChanges) await removeFileChanges(key);
+      else await fs.rm(path.join(this.dataDir, 'file-changes', key), { recursive: true, force: true, maxRetries: 3, retryDelay: 100 });
+    });
+    await attempt('state', this.stateFile, () => this.forgetDeletedSession(key));
+    await attempt('metadata', this.sessionMetaFile, () => this.writeSessionMeta(meta => {
+      const next = { ...meta }; delete next[key]; return { next };
+    }));
+    const dataRemoved = failures.every(item => !['archive', 'workspace', 'artifact-discovery', 'artifact-references', 'artifact', 'file-changes'].includes(item.stage));
+    const updated = { ...receipt, recordDeleted: true, complete: failures.length === 0, updatedAt: new Date().toISOString(), failures };
+    await attempt('cleanup-journal', this.cleanupFile(key), () => atomicWrite(this.cleanupFile(key), JSON.stringify(updated, null, 2)));
+    return {
+      deleted: true, recordDeleted: true, id: key, alreadyDeleted: missing, retriedCleanup,
+      dataRemoved, cleanupComplete: failures.length === 0, partial: failures.length > 0,
+      failures, cleanupFailures: failures, retryable: failures.length > 0,
+    };
+  }
+
+  /** Check the current pointer INSIDE its queue; do not clear a newly activated session. */
+  forgetDeletedSession(key) {
+    const operation = this.stateQueue.then(async () => {
+      if (this.lastSessionId !== key) return;
+      await atomicWrite(this.stateFile, '{}'); this.state = {};
+    });
+    this.stateQueue = operation.catch(() => {});
+    return operation;
+  }
+
+  async deleteAllSessions({ includePinned = true, excludeIds = [], removeFileChanges = null } = {}) {
     const exclude = new Set((excludeIds ?? []).map(x => String(x).toLowerCase()));
     const all = await this.listSessions();
-    const deletedIds = [];
-    const skippedLockedIds = [];
-    const skippedPinnedIds = [];
-    for (const item of all) {
+    const candidates = new Map(all.map(item => [item.id, item]));
+    // A second bulk delete also retries records already removed from the sidebar.
+    for (const id of await this.pendingCleanupIds()) if (!candidates.has(id)) candidates.set(id, { id, ...this.getSessionMeta(id) });
+    const deletedIds = [], retriedIds = [], cleanedIds = [], cleanupPendingIds = [];
+    const skippedLockedIds = [], skippedPinnedIds = [], failures = [], cleanupFailures = [], outcomes = [];
+    for (const item of candidates.values()) {
       if (exclude.has(item.id)) continue;
-      if (item.locked) {
-        skippedLockedIds.push(item.id);
-        continue;
-      }
-      if (!includePinned && item.pinned) {
-        skippedPinnedIds.push(item.id);
-        continue;
-      }
+      if (item.locked) { skippedLockedIds.push(item.id); continue; }
+      if (!includePinned && item.pinned) { skippedPinnedIds.push(item.id); continue; }
       try {
-        await this.deleteSession(item.id);
-        deletedIds.push(item.id);
-      } catch { /* ignore individual race */ }
+        const result = await this.deleteSession(item.id, { removeFileChanges });
+        outcomes.push(result);
+        if (result.recordDeleted) {
+          deletedIds.push(item.id);
+          if (result.retriedCleanup) retriedIds.push(item.id);
+          if (result.cleanupComplete) cleanedIds.push(item.id);
+          else { cleanupPendingIds.push(item.id); cleanupFailures.push(...result.cleanupFailures.map(failure => ({ id: item.id, ...failure }))); }
+        } else failures.push({ id: item.id, message: result.failures[0]?.message ?? '会话记录删除失败。', failures: result.failures });
+      } catch (error) {
+        if (error?.status === 423) skippedLockedIds.push(item.id);
+        else failures.push({ id: item.id, message: safeError(error) });
+      }
     }
-    // Also purge any leftover files in deleted-sessions
-    const archived = await fs.readdir(this.deletedDir).catch(() => []);
-    for (const name of archived) {
-      await fs.unlink(path.join(this.deletedDir, name)).catch(() => {});
-    }
+    // No blind purge of archives: locked/excluded sessions and cleanup receipts survive.
     return {
-      deleted: true,
-      deletedIds,
-      skippedLockedIds,
-      skippedPinnedIds,
-      deletedCount: deletedIds.length,
+      deleted: true, deletedIds, retriedIds, cleanedIds, cleanupPendingIds, outcomes,
+      skippedLockedIds, skippedPinnedIds, failures, cleanupFailures,
+      failedIds: failures.map(item => item.id), failedCount: failures.length,
+      deletedCount: outcomes.filter(item => item.recordDeleted && !item.alreadyDeleted).length, cleanedCount: cleanedIds.length,
+      cleanupFailedCount: cleanupPendingIds.length, retriedCount: retriedIds.length,
+      dataRemoved: failures.length === 0 && cleanupPendingIds.length === 0,
+      cleanupComplete: failures.length === 0 && cleanupPendingIds.length === 0,
+      partial: cleanupPendingIds.length > 0 || (deletedIds.length > 0 && failures.length > 0),
       skippedLockedCount: skippedLockedIds.length,
     };
   }

@@ -58,3 +58,32 @@ Harness Gemini's composer attachments and its native right-click editing menu ar
 | `src/attachments.js`, `src/ComposerAttachments.jsx`, `src/attachments.css` | The composer attachment surface described by the same ZCode sources: chip states, per-file progress, retry and removal, and a single drop surface on the conversation pane |
 
 The upload transport, the storage layout, the streaming events and the React presentation are Harness Gemini's own: files are written into the sending session's own working directory instead of a protocol upload transaction, and only references are stored on the message.
+
+## ZCode per-turn file changes and line statistics
+
+Harness Gemini 1.4.5 adapts ZCode's per-turn file-change model and change summary, from the same
+ZCode project, copyright holder and license recorded above (Copyright 2026 Z.AI Co., Ltd, Apache
+License 2.0; see [third-party/ZCode-LICENSE.txt](third-party/ZCode-LICENSE.txt) and
+[third-party/ZCode-NOTICE.md](third-party/ZCode-NOTICE.md)).
+
+| Harness Gemini file | Adapted ZCode source |
+| --- | --- |
+| `server/file-changes.mjs` | `computeLineChangeStat` from `packages/shared/src/lineChangeStat.ts`; the per-turn record shape (`ZCodePersistedFileChange`, `ZCodeTurnFileState`) from `packages/shared/src/zcode-task-types-core.ts`; turn aggregation from `packages/ui/src/lib/taskChangeSummary.ts` |
+| `dist/file-changes.js`, `dist/file-changes.css` | Layout of `packages/ui/src/MessageChangeSummaryPanel.tsx` (collapsible per-turn card, `+added -removed`, revert action, per-file review rows), re-implemented with React.createElement and Harness Gemini theme variables |
+
+Snapshot storage, conflict detection, revert/re-apply and the HTTP interface are Harness Gemini code.
+
+## ZCode app usage statistics, activity heatmap, and model usage charts
+
+Harness Gemini 1.4.6 adapts ZCode's local application token usage statistics, 52-week activity
+heatmap, daily model trend chart, and model share donut chart, from the same ZCode project,
+copyright holder and license recorded above (Copyright 2026 Z.AI Co., Ltd, Apache License 2.0;
+see [third-party/ZCode-LICENSE.txt](third-party/ZCode-LICENSE.txt) and
+[third-party/ZCode-NOTICE.md](third-party/ZCode-NOTICE.md)).
+
+| Harness Gemini file | Adapted ZCode source |
+| --- | --- |
+| `server/usage-stats.mjs` | `queryAppUsage` and normalized token accounting from `apps/zcode-cli/packages/adapters/src/storage/session-store/repositories/usage.ts`; `buildAppUsageSnapshot` and `resolveTzOffsetMs` from `apps/zcode-cli/packages/bootstrap/src/zcode-protocol/usage-stats-builder.ts`; `AppUsageSnapshot` schema from `packages/shared/src/usage-stats.ts` |
+| `dist/usage-stats.js`, `dist/usage-stats.css` | `AppUsagePanel.tsx`, `UsageHeatmap.tsx`, `UsageHeatmapCells.tsx`, `AppUsageDailyModelTrendChart.tsx`, `AppUsageModelUsagePieChart.tsx`, `appUsageModelPieChartViewModel.ts`, `appUsageChartPalette.ts`, `usageStatsUiParts.tsx`, and `tokenNumberFormat.ts` under `packages/ui/src/settings/usage-stats/` and `packages/ui/src/lib/`, re-implemented with SVG, `React.createElement`, and Harness Gemini theme variables |
+
+Monthly JSONL storage, fallback estimation for gateways that omit usage reports, and the Express HTTP endpoint are Harness Gemini code.

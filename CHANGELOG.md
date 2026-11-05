@@ -1,5 +1,18 @@
 # 更新记录
 
+## 1.5.7
+
+[版本说明与下载](https://github.com/gylidianh/harness-gemini/releases/tag/v1.5.7)
+
+- 修复代理错误分类：连接重置、临时 TLS 握手中断和认证阶段超时不再误判为永久证书或认证错误；真实证书错误及明确认证拒绝仍不重试。
+- 保留有限重试预算与原因链永久错误保护，TLS 证书校验不关闭。
+- 修复会话删除报告：区分记录删除与关联清理，返回部分成功、具体失败项并支持重复清理。
+- 更新仓库为与 1.5.7 安装包对应的 167 个应用文件，提供源码 ZIP 与 SHA256。
+- 本次仅静态校验，未运行应用、安装程序、回归测试或基准测试。
+
+[完整 1.5.7 说明](docs/releases/1.5.7.md)
+
+
 ## 1.4.4 · 2026-11-03
 
 [版本说明与下载](https://github.com/gylidianh/harness-gemini/releases/tag/v1.4.4)
@@ -27,4 +40,4 @@
 
 安装包：`Harness-Gemini-1.3.10-win-x64.exe`，Windows 10 / 11 x64。
 
-历史发行包仍可在 [全部 Releases](https://github.com/gylidianh/harness-gemini/releases) 中查看，用于版本对照和回退。首页与使用文档以 1.4.4 为准。
+历史发行包仍可在 [全部 Releases](https://github.com/gylidianh/harness-gemini/releases) 中查看，用于版本对照和回退。首页与使用文档以 1.5.7 为准；界面截图仍为 1.4.4 演示图。

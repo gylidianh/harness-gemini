@@ -1,0 +1,62 @@
+/* 1.4.8: a connection's advanced options — extra request headers, extra body fields with the
+   conversation's id in them, its own proxy, a concurrency limit and a requests-a-minute limit.
+   The rules are magpie's (yetone/magpie). Rendered inside the existing settings dialog. */
+
+.advanced-settings { display: grid; gap: 16px; margin: 2px 0 22px; }
+.advanced-section-title { margin: 0 0 2px; }
+.advanced-settings .advanced-field { display: grid; gap: 7px; margin: 0; }
+.advanced-settings .advanced-field > small { line-height: 1.6; color: var(--muted); }
+
+.advanced-header-list { display: grid; gap: 8px; }
+.advanced-header-row {
+  display: grid;
+  grid-template-columns: minmax(0, 0.9fr) minmax(0, 1.1fr) 32px;
+  gap: 8px;
+  align-items: center;
+}
+
+/* The dialog's own inputs are styled by the bundle; these controls sit outside that pattern,
+   so they take the same look from the theme's variables. */
+.advanced-settings input,
+.advanced-settings textarea {
+  width: 100%;
+  min-width: 0;
+  padding: 8px 11px;
+  border: 1px solid var(--line-strong, #ccc);
+  border-radius: 9px;
+  background: var(--surface, #fff);
+  color: var(--text, inherit);
+  font: inherit;
+  font-size: 12.5px;
+}
+.advanced-settings input { min-height: 38px; }
+.advanced-settings input:focus,
+.advanced-settings textarea:focus { outline: 2px solid var(--accent-tonal, #0002); border-color: var(--accent, #4a7dff); }
+.advanced-settings input:disabled,
+.advanced-settings textarea:disabled { opacity: .6; }
+
+.advanced-textarea {
+  min-height: 96px;
+  resize: vertical;
+  line-height: 1.6;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  white-space: pre;
+  overflow-x: auto;
+}
+
+.advanced-limit { max-width: 200px; }
+.advanced-add-header { width: fit-content; }
+.advanced-header-remove { color: var(--muted, #888); font-size: 15px; line-height: 1; }
+.advanced-header-remove:hover { color: var(--text, inherit); }
+
+/* The three proxy choices share one row: the dialog's own two-column grid is for a pair. */
+.advanced-settings .advanced-proxy-choices { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 6px; }
+.advanced-settings .advanced-proxy-choices .tool-round-choice {
+  justify-content: center;
+  gap: 6px;
+  padding: 9px 6px;
+  font-size: 12.5px;
+  white-space: nowrap;
+}
+.advanced-settings .advanced-proxy-choices .tool-round-choice input { flex: none; width: 15px; height: 15px; }
+.advanced-settings .advanced-proxy-choices + input { max-width: 360px; }

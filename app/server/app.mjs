@@ -6,6 +6,7 @@ import { fileURLToPath } from 'node:url';
 import { Readable } from 'node:stream';
 import { pipeline } from 'node:stream/promises';
 import { Store, isMaskedApiKey, maskApiKey, normalizeBaseUrl, publicSettings, resolveConnectionSettings } from './store.mjs';
+import { normalizeHeaders, normalizeProxyMode, normalizeProxyUrl } from './provider-extra.mjs'; // 1.4.8
 import { ArtifactStore, contextText, MediaTextFilter } from './media.mjs';
 import {
   ATTACHMENT_BODY_LIMIT, MAX_INLINE_IMAGE_MESSAGES, MAX_INLINE_IMAGE_TOTAL_BYTES,
@@ -34,6 +35,8 @@ import { PdfPipeline, RECORD_PDF_TOOL } from './pdf-pipeline.mjs';
 import { performWorkspaceFileAction, workspaceFileApplications, workspaceFileInfo, workspaceImageContent } from './workspace-files.mjs';
 import { boundedString, checkAbort, HttpError, isObject, listDirectory, readWorkspaceFile, requireObject, safeError } from './util.mjs';
 import { ErrorLog } from './error-log.mjs';
+import { FileChangeStore } from './file-changes.mjs'; // 1.4.5
+import { UsageStatsStore } from './usage-stats.mjs'; // 1.4.6
 
 export const PROJECT_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 /**
@@ -407,6 +410,10 @@ export async function createApp({ dataDir = path.join(PROJECT_ROOT, 'data'), def
   /** What the prompt says about external skills for one mode. */
   const externalInfo = mode => ({ directory: externalSkills.directory, count: externalSkills.tools({ readOnlyOnly: mode !== 'agent' }).length });
   const artifacts = new ArtifactStore(store.artifactDir);
+  // 1.4.5: what the agent changed in each conversation, kept outside the workspace.
+  const fileChanges = new FileChangeStore({ dataDir });
+  // 1.4.6: local token & turn usage observability for Settings -> 用量统计.
+  const usageStats = new UsageStatsStore({ dataDir });
   // Every failure is also written to <dataDir>/logs/errors.log, so a reason survives the banner.
   const errorLog = new ErrorLog({ dataDir, version: VERSION });
   for (const problem of store.startupProblems ?? []) void errorLog.write({ source: problem.source ?? 'startup', message: problem.message, error: problem.error, ...(problem.profileId ? { profileId: String(problem.profileId) } : {}) });
@@ -483,7 +490,9 @@ export async function createApp({ dataDir = path.join(PROJECT_ROOT, 'data'), def
       // Sending a message is the clearest signal of which conversation is in use.
       void store.rememberSession(session.id).catch(() => {});
       // The run works in this session's own directory, never one shared global path.
-      const settings = { ...run.settings, workspace: await store.ensureSessionWorkspace(session) };
+      // 1.4.8: the conversation's id travels with the request settings, so a connection's
+      // ${sessionId} placeholder names this conversation rather than whichever one came before.
+      const settings = { ...run.settings, sessionId: session.id, workspace: await store.ensureSessionWorkspace(session) };
       const model = modelForMode(settings, run.mode);
       if (store.keyUnreadable?.(settings.profileId)) throw new HttpError(409, '已保存的 API 密钥无法在本机解密；请在设置中重新填写该连接的密钥。');
       run.settings = settings; run.session = session;
@@ -499,6 +508,19 @@ export async function createApp({ dataDir = path.join(PROJECT_ROOT, 'data'), def
       run.metricsTracker = tracker;
       const assistant = { id: run.messageId, role: 'assistant', text: '', reasoning: '', createdAt: now, mode: run.mode, status: 'running', artifacts: [], tools: [], tasks: [], compactions: [], metrics: tracker.snapshot(), context: null, profileId: settings.profileId, profileName: settings.profileName, approvalMode: settings.approvalMode, model };
       run.assistant = assistant;
+      // 1.4.5 / 1.4.7: every file this turn writes or downloads is recorded under this reply unless disabled in Workspace settings.
+      const fileChangeRecorder = settings.fileChangesEnabled !== false ? fileChanges.recorder(run.id, { turnId: assistant.id, userText: run.text, createdAt: now }) : null;
+      // 1.4.6: track model requests and turn duration for local usage statistics.
+      run.turnStartedAt = Date.now();
+      run.turnModelRequests = 0;
+      const recordModelCall = payload => {
+        run.turnModelRequests = (run.turnModelRequests ?? 0) + 1;
+        void usageStats.recordModel({
+          sessionId: run.id, turnId: assistant.id,
+          providerId: settings.profileId, providerName: settings.profileName, mode: run.mode,
+          ...payload,
+        }).catch(() => {});
+      };
       session.messages.push(user);
       session.messages.push(assistant);
       if (session.title === '新对话') session.title = turnTitle(run);
@@ -574,11 +596,15 @@ export async function createApp({ dataDir = path.join(PROJECT_ROOT, 'data'), def
         // Keep the exact reasoning for this provider reply. The session's display text spans
         // several tool rounds, so replaying that aggregate would attach other rounds' thinking.
         let reasoningThisRound = '';
+        const reqStartedAt = Date.now();
+        let firstTokenAt = null;
+        const markFirstToken = () => { if (firstTokenAt === null) firstTokenAt = Date.now(); };
         tracker.beginRequest({ image: imageRequest });
         await publishMetrics(true);
         const filter = new MediaTextFilter({
           artifactStore: artifacts,
           onText: async text => {
+            if (text) markFirstToken();
             tracker.addText(text);
             if (firstText && assistant.text && !assistant.text.endsWith('\n')) await append('\n\n');
             firstText = false;
@@ -597,6 +623,7 @@ export async function createApp({ dataDir = path.join(PROJECT_ROOT, 'data'), def
         // and it is kept on the message so the turn stays readable afterwards.
         const onReasoning = async text => {
           if (!text) return;
+          markFirstToken();
           reasoningThisRound += text;
           tracker.addReasoning(text);
           assistant.reasoning += text;
@@ -619,7 +646,7 @@ export async function createApp({ dataDir = path.join(PROJECT_ROOT, 'data'), def
               reasoningThisRound = '';
               await sse.send('retry', {
                 id: assistant.id, attempt: info.attempt, attempts: info.attempts,
-                message: info.transport ? `${info.error}，正在重新连接（第 ${info.attempt} / ${info.attempts - 1} 次）…` : info.http ? `${info.error}，稍后自动重试（第 ${info.attempt} / ${info.attempts} 次）…` : `连接已建立但一直没有返回内容，正在重新连接（第 ${info.attempt} / ${info.attempts} 次）`,
+                message: info.transport ? `${String(info.error).replace(/[。.]+$/, '')}，正在重新连接（第 ${info.attempt} / ${info.attempts - 1} 次）…` : info.http ? `${info.error}，稍后自动重试（第 ${info.attempt} / ${info.attempts} 次）…` : `连接已建立但一直没有返回内容，正在重新连接（第 ${info.attempt} / ${info.attempts} 次）`,
               });
             },
             // A refused reasoning level is reported plainly: the turn continues, so this is a
@@ -631,6 +658,14 @@ export async function createApp({ dataDir = path.join(PROJECT_ROOT, 'data'), def
           await filter.finish();
           activeFilter = null;
           tracker.finishRequest(result);
+          recordModelCall({
+            querySource: imageRequest ? 'image' : 'main_turn', modelId: model, status: 'completed',
+            startedAt: reqStartedAt, completedAt: Date.now(),
+            timeToFirstTokenMs: firstTokenAt !== null ? Math.max(0, firstTokenAt - reqStartedAt) : null,
+            finishReason: result.finishReason, toolCallCount: result.toolCalls?.length ?? 0,
+            usage: result.usage, messages, tools, text: filter.text, reasoning: reasoningThisRound,
+            toolCalls: result.toolCalls, imageRequest,
+          });
           await publishMetrics(true);
           return { ...result, text: filter.text, artifacts: filter.artifacts, reasoning: reasoningThisRound };
         } catch (error) {
@@ -640,6 +675,14 @@ export async function createApp({ dataDir = path.join(PROJECT_ROOT, 'data'), def
           // cancel() flushes the held text tail; include it in the replay as well as the UI.
           const partial = filter?.text ?? "";
           tracker.finishRequest();
+          recordModelCall({
+            querySource: imageRequest ? 'image' : 'main_turn', modelId: model,
+            status: signal.aborted ? 'cancelled' : 'error',
+            startedAt: reqStartedAt, completedAt: Date.now(),
+            timeToFirstTokenMs: firstTokenAt !== null ? Math.max(0, firstTokenAt - reqStartedAt) : null,
+            usage: null, messages, tools, text: partial, reasoning: reasoningThisRound,
+            toolCalls: [], imageRequest,
+          });
           await publishMetrics(true);
           if (partial.trim()) error.partialText = partial;
           if (reasoningThisRound) error.partialReasoning = reasoningThisRound;
@@ -707,11 +750,22 @@ export async function createApp({ dataDir = path.join(PROJECT_ROOT, 'data'), def
           });
           // The summary request is measured separately: its tokens are not part of the visible
           // reply, and a failed summary must not be reported as generated answer text.
+          const compactStartedAt = Date.now();
+          let compactFirstTokenAt = null;
           const result = await completion({
             settings, model, messages: request, stream: true, signal,
-            onText: text => { summaryText += text; },
+            onText: text => { if (text && compactFirstTokenAt === null) compactFirstTokenAt = Date.now(); summaryText += text; },
             onReasoning: () => {},
           });
+          recordModelCall({
+            querySource: 'compact', modelId: model, status: 'completed',
+            startedAt: compactStartedAt, completedAt: Date.now(),
+            timeToFirstTokenMs: compactFirstTokenAt !== null ? Math.max(0, compactFirstTokenAt - compactStartedAt) : null,
+            finishReason: result.finishReason, toolCallCount: 0,
+            usage: result.usage, messages: request, tools: [], text: summaryText || result.text || '',
+          });
+          // 1.5.6: never advance the boundary with an unfinished summary.
+          if (result.finishReason === 'length') throw new Error('压缩摘要达到输出上限而被截断，未替换对话历史；请缩小压缩范围或调高模型输出上限后重试。');
           const summary = formatCompactSummary(summaryText || result.text || '');
           if (!summary) throw new Error('压缩摘要为空，未替换对话历史。');
           // A summary that is not smaller than what it replaces would make the window worse, so
@@ -1009,7 +1063,7 @@ export async function createApp({ dataDir = path.join(PROJECT_ROOT, 'data'), def
                 // A child is never offered delegation itself, and its task list would be a
                 // second checklist for one turn; both are dropped from its tool set.
                 tools: availableTools.filter(candidate => !['spawn_subagent', 'update_tasks'].includes(candidate.function.name)),
-                signal, generateImage, webOptions, externalSkills,
+                signal, generateImage, webOptions, externalSkills, fileChanges: fileChangeRecorder, recordModelUsage: recordModelCall,
                 // 1.3.3-fix2: the same post-approval browser authorisation the parent uses.
                 authorizeBrowser: authorizeApprovedBrowser,
                 // The child's model requests are measured by the parent's tracker as well, so the
@@ -1116,7 +1170,7 @@ export async function createApp({ dataDir = path.join(PROJECT_ROOT, 'data'), def
               const managedPdf = tool.name === 'record_pdf_pages' || (tool.name === 'ext_read_pdf' && (args?.resume === true || args?.review === true));
               const guarded = guardSkill && !managedPdf ? await readGuard.check(guardSkill, args, settings.workspace) : { key: null };
               const invoke = (name, input) => executeTool(name, input, {
-                workspace: settings.workspace, signal, generateImage, access: plan.access, webOptions, externalSkills,
+                workspace: settings.workspace, signal, generateImage, access: plan.access, webOptions, externalSkills, fileChanges: fileChangeRecorder,
                 // The built-in browser lives in the renderer: announce the request on this
                 // run's stream and wait for the page the renderer read back.
                 requestBrowser: ({ action, args: browserArgs, timeoutMs }) => browsers.ask({
@@ -1299,6 +1353,21 @@ export async function createApp({ dataDir = path.join(PROJECT_ROOT, 'data'), def
         }
         if (sse) await sse.send('metrics', { id: run.assistant.id, metrics: run.assistant.metrics });
         if (sse && run.assistant.context) await sse.send('context', { id: run.assistant.id, context: run.assistant.context });
+        const allTurnTools = [];
+        for (const t of run.assistant.tools ?? []) {
+          allTurnTools.push({ name: t.name, status: t.status });
+          if (Array.isArray(t.subagent?.steps)) {
+            for (const s of t.subagent.steps) allTurnTools.push({ name: s.name, status: s.status });
+          }
+        }
+        void usageStats.recordTurn({
+          sessionId: run.id, turnId: run.assistant.id, mode: run.mode, status: run.assistant.status,
+          startedAt: run.turnStartedAt ?? Date.now(), completedAt: Date.now(),
+          modelRequestCount: run.turnModelRequests ?? 0,
+          toolCallCount: allTurnTools.length,
+          toolErrorCount: allTurnTools.filter(t => t.status === 'error').length,
+          tools: allTurnTools,
+        }).catch(() => {});
       }
       // Decide before cleanup aborts the controller, which also happens on success.
       const completionInfo = manuallyStopped() ? undefined : Object.freeze({
@@ -1327,6 +1396,12 @@ export async function createApp({ dataDir = path.join(PROJECT_ROOT, 'data'), def
 
   app.get('/api/status', (req, res) => res.json({ version: VERSION, appName: APP_NAME, pid: process.pid, workspace: store.settings.workspace, lastSessionId: store.lastSessionId ?? null, settingsReady: Boolean(store.settings.baseUrl && (store.settings.chatModel || store.settings.agentModel || store.settings.imageModel)) }));
   app.get('/api/settings', (req, res) => res.json(publicSettings(store.settings)));
+  // 1.4.6: local token & conversation usage snapshot for Settings -> 用量统计.
+  app.get('/api/usage/stats', async (req, res) => {
+    const range = typeof req.query.range === 'string' ? req.query.range : '7d';
+    const timeZone = typeof req.query.timeZone === 'string' ? req.query.timeZone : undefined;
+    res.json(await usageStats.getSnapshot({ range, timeZone }));
+  });
   app.get('/api/error-log', async (req, res) => {
     const limit = Math.min(500, Math.max(1, Number.parseInt(String(req.query.limit ?? '50'), 10) || 50));
     res.json({ path: errorLog.file, directory: errorLog.directory, entries: await errorLog.recent(limit) });
@@ -1345,7 +1420,7 @@ export async function createApp({ dataDir = path.join(PROJECT_ROOT, 'data'), def
   });
   app.post('/api/models', async (req, res) => {
     const body = requireObject(req.body);
-    if (Object.keys(body).some(field => !['profileId', 'baseUrl', 'apiKey', 'protocol'].includes(field))) throw new HttpError(400, '读取模型列表仅接受 profileId、baseUrl、apiKey 和 protocol。');
+    if (Object.keys(body).some(field => !['profileId', 'baseUrl', 'apiKey', 'protocol', 'headers', 'proxyMode', 'proxyUrl', 'globalProxyUrl'].includes(field))) throw new HttpError(400, '读取模型列表仅接受 profileId、baseUrl、apiKey、protocol、headers、proxyMode、proxyUrl 和 globalProxyUrl。');
     const saved = 'profileId' in body ? resolveConnectionSettings(store.settings, body.profileId) : null;
     const baseUrl = normalizeBaseUrl(body.baseUrl);
     if (!baseUrl) throw new HttpError(400, '请填写 API 地址后再读取模型列表。');
@@ -1363,7 +1438,15 @@ export async function createApp({ dataDir = path.join(PROJECT_ROOT, 'data'), def
     if ('protocol' in body && !['chat', 'anthropic', 'responses'].includes(body.protocol)) throw new HttpError(400, 'API 协议必须是 chat、anthropic 或 responses。');
     const apiKey = suppliedKey || (saved?.baseUrl === baseUrl ? saved.apiKey : '');
     const protocol = body.protocol ?? saved?.protocol ?? 'chat';
-    try { res.json(await listModels({ baseUrl, apiKey, protocol })); }
+    // 1.4.8: a private gateway usually answers only with its own headers (and through its own
+    // proxy), so the dialog's "read this connection's models" sends them too, and falls back to
+    // the saved ones when the draft page has not typed any.
+    const headers = 'headers' in body ? normalizeHeaders(body.headers, { strict: true }) : (saved?.headers ?? []);
+    const proxyMode = 'proxyMode' in body ? normalizeProxyMode(body.proxyMode) : (saved?.proxyMode ?? 'global');
+    const proxyUrl = 'proxyUrl' in body ? normalizeProxyUrl(body.proxyUrl, { strict: true, label: '代理地址' }) : (saved?.proxyUrl ?? '');
+    const globalProxyUrl = 'globalProxyUrl' in body ? normalizeProxyUrl(body.globalProxyUrl, { strict: true }) : (store.settings.globalProxyUrl ?? '');
+    if (proxyMode === 'custom' && !proxyUrl) throw new HttpError(400, '请填写自定义代理地址。');
+    try { res.json(await listModels({ baseUrl, apiKey, protocol, headers, proxyMode, proxyUrl, globalProxyUrl })); }
     catch (error) { throw new HttpError(502, safeError(error, apiKey)); }
   });
   /** External skills: the scripts the model may call by itself, re-read on every request. */
@@ -1413,7 +1496,11 @@ export async function createApp({ dataDir = path.join(PROJECT_ROOT, 'data'), def
       }
     }
     if (stopPromises.length) await Promise.allSettled(stopPromises);
-    res.json(await store.deleteAllSessions({ includePinned }));
+    const busyIds = [...new Set([...runs.keys(), ...startingRuns])];
+    const outcome = await store.deleteAllSessions({ includePinned, excludeIds: busyIds, removeFileChanges: id => fileChanges.removeSession(id) });
+    outcome.skippedRunningIds = busyIds;
+    outcome.skippedRunningCount = busyIds.length;
+    res.json(outcome);
   });
   app.post('/api/sessions', async (req, res) => {
     const body = req.body ?? {}; requireObject(body);
@@ -1474,7 +1561,8 @@ export async function createApp({ dataDir = path.join(PROJECT_ROOT, 'data'), def
   app.delete('/api/sessions/:id', async (req, res) => {
     if (store.isSessionLocked(req.params.id)) throw new HttpError(423, '此会话已锁定，请先解锁后再删除。');
     if (runs.has(req.params.id) || startingRuns.has(req.params.id)) throw new HttpError(409, '请先停止此会话，再删除。');
-    res.json(await store.deleteSession(req.params.id));
+    const outcome = await store.deleteSession(req.params.id, { removeFileChanges: id => fileChanges.removeSession(id) });
+    res.json(outcome);
   });
   /**
    * One attachment is uploaded before the message that uses it. The bytes are validated and
@@ -1544,6 +1632,32 @@ export async function createApp({ dataDir = path.join(PROJECT_ROOT, 'data'), def
     if (!body.ok && typeof body.error !== 'string') throw new HttpError(400, 'ok 为 false 时必须返回 error 文本。');
     browsers.resolve(req.params.id, body.ok ? { ok: true, result: body.result } : { ok: false, error: body.error });
     res.json({ accepted: true });
+  });
+  // 1.4.5: the files the agent changed in a conversation, their diffs, and revert / re-apply.
+  const FILE_CHANGE_TURN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+  const fileChangeTurn = value => { if (!FILE_CHANGE_TURN.test(String(value))) throw new HttpError(404, '这一轮没有文件改动记录。'); return String(value); };
+  app.get('/api/sessions/:id/file-changes', async (req, res) => {
+    await store.getSession(req.params.id);
+    if (store.settings.fileChangesEnabled === false) {
+      return res.json({ sessionId: String(req.params.id).toLowerCase(), enabled: false, turnCount: 0, fileCount: 0, added: 0, removed: 0, turns: [] });
+    }
+    res.json({ enabled: true, ...(await fileChanges.list(req.params.id)) });
+  });
+  app.get('/api/sessions/:id/file-changes/:turnId/diff', async (req, res) => {
+    if (store.settings.fileChangesEnabled === false) throw new HttpError(409, '文件改动接口已在工作区设置中关闭。');
+    await store.getSession(req.params.id);
+    if (typeof req.query.path !== 'string') throw new HttpError(400, '缺少文件路径。');
+    res.json(await fileChanges.diff(req.params.id, fileChangeTurn(req.params.turnId), req.query.path));
+  });
+  app.post('/api/sessions/:id/file-changes/:turnId/apply', async (req, res) => {
+    if (closing) throw new HttpError(503, '服务正在关闭。');
+    if (store.settings.fileChangesEnabled === false) throw new HttpError(409, '文件改动接口已在工作区设置中关闭。');
+    await store.getSession(req.params.id);
+    if (runs.has(req.params.id) || startingRuns.has(req.params.id)) throw new HttpError(409, '这个对话正在运行，请等它结束或先停止，再撤回文件改动。');
+    const body = requireObject(req.body);
+    res.json(await fileChanges.apply(req.params.id, fileChangeTurn(req.params.turnId), {
+      action: body.action ?? 'revert', paths: body.paths ?? null, force: body.force === true,
+    }));
   });
   app.get('/api/workspace', async (req, res) => {
     const requested = req.query.path ?? '.';
@@ -1621,7 +1735,7 @@ export async function createApp({ dataDir = path.join(PROJECT_ROOT, 'data'), def
     res.status(status).json({ error: message, message, ...(res.locals.runCompletion ? { completion: res.locals.runCompletion } : {}) });
   });
   app.locals.harness = {
-    store, skills, runs, approvals, externalSkills, errorLog,
+    store, skills, runs, approvals, externalSkills, errorLog, usageStats,
     close() {
       // Called by the desktop shell and again by server.stop(); both wait for the same shutdown.
       closePromise ??= (async () => {
@@ -1632,6 +1746,7 @@ export async function createApp({ dataDir = path.join(PROJECT_ROOT, 'data'), def
         await Promise.allSettled([...pendingFileActions].map(operation => operation.promise));
         await store.flush();
         await errorLog.flush();
+        await usageStats.flush();
         await skills.queue.catch(() => {});
       })();
       return closePromise;

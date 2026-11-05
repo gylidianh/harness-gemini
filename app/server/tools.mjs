@@ -510,7 +510,7 @@ async function writeNewFile(workspace, requested, target, content, access, signa
   } finally { await file.close(); }
 }
 
-export async function executeTool(name, args, { workspace, signal, generateImage, access = {}, webOptions = {}, onProgress, requestBrowser, externalSkills }) {
+export async function executeTool(name, args, { workspace, signal, generateImage, access = {}, webOptions = {}, onProgress, requestBrowser, externalSkills, fileChanges = null }) {
   checkAbort(signal);
   if (isExternalTool(name)) {
     const skill = externalSkillFor(name, externalSkills);
@@ -530,8 +530,11 @@ export async function executeTool(name, args, { workspace, signal, generateImage
     const existing = await existingFile(checked.absolute);
     if (existing && !existing.isFile()) throw new HttpError(400, '目标不是普通文件。');
     checkAbort(signal);
+    // 1.4.5: keep what the file held before, so the change can be shown and reverted.
+    const changeToken = fileChanges ? await fileChanges.before(checked.absolute, { tool: 'write_file', relative: checked.relative }) : null;
     if (access.mustBeNew === true) await writeNewFile(workspace, args.path, checked, args.content, access, signal);
     else await atomicWrite(checked.absolute, args.content, { mode: existing ? existing.mode & 0o777 : 0o600 });
+    if (changeToken) await fileChanges.after(changeToken);
     return { path: checked.relative, bytes: Buffer.byteLength(args.content, 'utf8'), written: true };
   }
   if (name === 'run_command') return runCommand(workspace, args, signal, access);
@@ -539,7 +542,17 @@ export async function executeTool(name, args, { workspace, signal, generateImage
   if (name === 'update_tasks') return taskToolResult(normalizeTaskList(args));
   if (name === 'web_search') return searchWeb(args, { ...webOptions, signal });
   if (name === 'fetch_url') return readWebPage(args, { ...webOptions, signal });
-  if (name === 'download_file') return downloadFile(args, { ...webOptions, workspace, signal, access, onProgress });
+  if (name === 'download_file') {
+    // 1.4.5: a download is a file change as well; an overwritten file keeps its old content.
+    let changeToken = null;
+    if (fileChanges) {
+      const destination = await validateDownloadDestination(args, { workspace, access });
+      changeToken = await fileChanges.before(destination.absolute, { tool: 'download_file', relative: destination.relative });
+    }
+    const downloaded = await downloadFile(args, { ...webOptions, workspace, signal, access, onProgress });
+    if (changeToken) await fileChanges.after(changeToken);
+    return downloaded;
+  }
   if (BROWSER_TOOL_NAMES.has(name)) {
     if (typeof requestBrowser !== 'function') throw new HttpError(501, '内置浏览器只在 Harness Gemini 桌面版中可用；当前环境请改用 fetch_url 读取网页。');
     const action = name === 'browser_navigate' ? 'navigate' : name === 'browser_open' ? 'open' : name === 'browser_snapshot' ? 'snapshot' : name === 'browser_act' ? 'act' : name === 'browser_screenshot' ? 'screenshot' : 'read';

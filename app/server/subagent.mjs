@@ -153,7 +153,7 @@ export function normalizeSpawnArgs(args) {
  */
 export async function runSubagent({
   prompt, label, settings, model, workspace, tools, signal,
-  depth = 0, generateImage, webOptions, requestBrowser, approve, onUpdate, onNotice, metrics = null, externalSkills, authorizeBrowser = null,
+  depth = 0, generateImage, webOptions, requestBrowser, approve, onUpdate, onNotice, metrics = null, externalSkills, authorizeBrowser = null, fileChanges = null, recordModelUsage = null,
 }) {
   const state = {
     id: randomUUID(),
@@ -173,6 +173,10 @@ export async function runSubagent({
     startedAt: new Date().toISOString(),
     finishedAt: null,
   };
+  // 1.5.4: the tracker declaration had been lost, so every child threw "tracker is not defined"
+  // before its first request: nothing was ever published and the card stayed on "reading the task".
+  // 1.5.6: one settings snapshot per child; placeholders must identify this child.
+  const childSettings = { ...settings, subagentId: state.id };
   const tracker = new GenerationMetrics();
   state.metrics = tracker.snapshot();
   let lastPublish = 0;
@@ -232,14 +236,18 @@ export async function runSubagent({
     try {
       await note('子代理出错，正在根据已完成的步骤整理阶段性结论…');
       let salvaged = '';
+      const salvageStartedAt = Date.now();
+      let salvageFirstTokenAt = null;
+      const salvageMessages = [...messages, { role: 'user', content: SALVAGE_PROMPT }];
       const salvageTools = protocolOf(settings) === 'anthropic' && tools.length ? { tools, toolChoice: 'none' } : { tools: [] };
       const result = await completion({
-        settings, model, messages: [...messages, { role: 'user', content: SALVAGE_PROMPT }], ...salvageTools, stream: true, signal,
+        settings: childSettings, model, messages: salvageMessages, ...salvageTools, stream: true, signal,
         retries: 3, transportRetries: 2, httpRetries: 3,
-        onText: async text => { salvaged += text; tracker.addText(text, own); },
+        onText: async text => { if (text && salvageFirstTokenAt === null) salvageFirstTokenAt = Date.now(); salvaged += text; tracker.addText(text, own); },
         onUsage: report => tracker.recordUsage(report, own),
       });
       tracker.finishRequest({ usage: result.usage, toolCalls: [] }, own);
+      recordModelUsage?.({ querySource: 'subagent', modelId: model, status: 'completed', startedAt: salvageStartedAt, completedAt: Date.now(), timeToFirstTokenMs: salvageFirstTokenAt !== null ? Math.max(0, salvageFirstTokenAt - salvageStartedAt) : null, finishReason: result.finishReason, toolCallCount: 0, usage: result.usage, messages: salvageMessages, tools: salvageTools.tools, text: salvaged || result.text || '' });
       const text = (salvaged || result.text || '').trim();
       if (text) { state.text = text; state.partial = true; }
     } catch {
@@ -276,6 +284,9 @@ export async function runSubagent({
         let attemptText = '';
         let attemptReasoning = '';
         let carryOn = null;
+        const attemptStartedAt = Date.now();
+        let attemptFirstTokenAt = null;
+        const markAttemptToken = () => { if (attemptFirstTokenAt === null) attemptFirstTokenAt = Date.now(); };
         shared = metrics ? metrics.beginRequest() : null;
         own = tracker.beginRequest();
         try {
@@ -289,9 +300,10 @@ export async function runSubagent({
             if (!requestFits(messages, roundTools, settings)) throw new HttpError(413, '子代理的上下文已超出配置窗口，请增大上下文窗口或把任务拆得更小。');
           }
           result = await completion({
-            settings, model, messages, tools: roundTools, stream: true, signal,
+            settings: childSettings, model, messages, tools: roundTools, stream: true, signal,
             ...(lastRound && noToolsRound.toolChoice ? { toolChoice: 'none' } : {}),
             onText: async text => {
+              if (text) markAttemptToken();
               attemptText += text;
               roundText += text;
               state.text = roundText;
@@ -302,6 +314,7 @@ export async function runSubagent({
             },
             onReasoning: async text => {
               if (!text) return;
+              markAttemptToken();
               attemptReasoning += text;
               state.reasoning += text;
               tracker.addReasoning(text, own);
@@ -327,6 +340,7 @@ export async function runSubagent({
           });
           replyText = attemptText || result.text || '';
           replyReasoning = attemptReasoning;
+          recordModelUsage?.({ querySource: 'subagent', modelId: model, status: 'completed', startedAt: attemptStartedAt, completedAt: Date.now(), timeToFirstTokenMs: attemptFirstTokenAt !== null ? Math.max(0, attemptFirstTokenAt - attemptStartedAt) : null, finishReason: result.finishReason, toolCallCount: result.toolCalls?.length ?? 0, usage: result.usage, messages, tools: roundTools, text: replyText, reasoning: replyReasoning, toolCalls: result.toolCalls });
           toolImages.afterRequest();
           await pdfPipeline.markSent();
           state.finishReason = result.finishReason ?? null;
@@ -345,6 +359,7 @@ export async function runSubagent({
           tracker.finishRequest({}, own);
           if (shared) metrics.finishRequest({}, shared);
           state.metrics = tracker.snapshot();
+          recordModelUsage?.({ querySource: 'subagent', modelId: model, status: signal?.aborted ? 'cancelled' : 'error', startedAt: attemptStartedAt, completedAt: Date.now(), timeToFirstTokenMs: attemptFirstTokenAt !== null ? Math.max(0, attemptFirstTokenAt - attemptStartedAt) : null, usage: null, messages, tools: roundTools, text: attemptText, reasoning: attemptReasoning, toolCalls: [] });
           // A connection that broke in the middle of the child's answer is not the child's answer,
           // and not a reason to throw the delegation away: what it had already written is kept and
           // it is asked to carry on from exactly that point.
@@ -434,7 +449,7 @@ export async function runSubagent({
           const guarded = guardSkill && !managedPdf ? await readGuard.check(guardSkill, args, workspace) : { key: null };
           guardKeys.set(call.id, guarded);
           const invoke = (name, input) => executeTool(name, input, {
-            workspace, signal, generateImage, access: plan.access, webOptions, requestBrowser, externalSkills,
+            workspace, signal, generateImage, access: plan.access, webOptions, requestBrowser, externalSkills, fileChanges,
           });
           if (guarded.output) output = guarded.output;
           else if (step.name === 'record_pdf_pages') output = await pdfPipeline.record(args, input => invoke('ext_read_pdf', input));

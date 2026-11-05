@@ -4,6 +4,7 @@ import { promises as fs } from 'node:fs';
 import path from 'node:path';
 import { checkDesktopService, serviceHasStopped, writeSmokeReport } from './smoke.mjs';
 import { createCompletionNotifications, installNotificationTestHandler, isProtocolLaunch, OPEN_SESSION_CHANNEL, sessionFromProtocolArgs } from './completion-notifications.mjs';
+import { createTaskbarAttention } from './taskbar-attention.mjs';
 import { createEmbeddedBrowser } from './browser.mjs';
 import { installContextMenu } from './context-menu.mjs';
 import { createDesktopPet } from './pet.mjs';
@@ -21,6 +22,7 @@ let flags;
 let mainWindow;
 let server;
 let completionNotifications;
+let taskbarAttention;
 // Retain launches before the service/window/notification manager exists. A newer click wins.
 let pendingNotificationLaunch = isProtocolLaunch(argv, NOTIFICATION_PROTOCOL)
   ? { sessionId: sessionFromProtocolArgs(argv, NOTIFICATION_PROTOCOL) ?? undefined } : undefined;
@@ -246,6 +248,8 @@ function secureWindow(window) {
 async function loadWindowIcon() {
   const resources = process.resourcesPath;
   const candidates = [
+    resources && path.join(resources, 'icon.png'),
+    path.join(app.getAppPath(), 'build', 'icon.png'),
     resources && path.join(resources, 'icon.ico'),
     resources && path.join(resources, 'app.asar.unpacked', 'build', 'icon.ico'),
     path.join(app.getAppPath(), 'build', 'icon.ico'),
@@ -367,10 +371,11 @@ function requestQuit({ confirmActive = true, exitCode = 0, smokeReport } = {}) {
       if (result?.response !== 1) {
         quitting = null;
         // fix3: completions that finished while the dialog was open are announced now.
-        setImmediate(() => { try { dispatchNotificationLaunch(); completionNotifications?.flushDeferred(); } catch { /* Best effort. */ } });
+        setImmediate(() => { try { dispatchNotificationLaunch(); completionNotifications?.flushDeferred(); taskbarAttention?.refresh(); } catch { /* Best effort. */ } });
         return;
       }
     }
+    taskbarAttention?.dispose();
     completionNotifications?.dispose();
     embeddedBrowser?.dispose();
     await desktopPet?.dispose();
@@ -424,6 +429,10 @@ async function launch() {
   await app.whenReady();
   dataDir = flags.dataDir ?? path.join(app.getPath('userData'), 'data');
   workspace = flags.workspaceDir ?? path.join(app.getPath('documents'), 'Local Harness', 'workspace');
+  const { setSystemProxyResolver } = await import('../server/http-agent.mjs');
+  const modelProxySession = session.fromPartition('model-system-proxy');
+  await modelProxySession.setProxy({ mode: 'system' });
+  setSystemProxyResolver(url => modelProxySession.resolveProxy(url));
   const { startServer } = await import('../server/index.mjs');
   const { safeStorageCodec } = await import('../server/secret.mjs');
   // API keys are sealed with the OS keychain, so settings.json never holds a usable key.
@@ -447,6 +456,10 @@ async function launch() {
       if (app.isDefaultProtocolClient(...protocolArgs) || app.setAsDefaultProtocolClient(...protocolArgs)) notificationProtocol = NOTIFICATION_PROTOCOL;
     } catch { notificationProtocol = null; }
   }
+  taskbarAttention = createTaskbarAttention({
+    getWindow: () => mainWindow,
+    isSuppressed: () => Boolean(flags.smokeTest || quitConfirmationOpen || quitting || finalExit),
+  });
   completionNotifications = createCompletionNotifications({
     Notification,
     getWindow: () => mainWindow,
@@ -497,6 +510,7 @@ async function launch() {
     }
   });
   server = await startServer({ port: 0, dataDir, defaultWorkspace: workspace, distDir: path.join(app.getAppPath(), 'dist'), onRunFinished: completion => {
+    taskbarAttention.notify(completion);
     completionNotifications.notify(completion);
     desktopPet?.onRunFinished(completion);
   }, secrets, authorizeBrowserNavigation: async (url, access) => {
@@ -524,6 +538,7 @@ async function launch() {
   // A path inside app.asar cannot be opened by the shell, and a portable build runs from an
   // extracted directory, so the bitmap is attached to the window itself as well.
   if (appIcon) mainWindow.setIcon(appIcon);
+  taskbarAttention.attach();
   secureWindow(mainWindow);
   embeddedBrowser = createEmbeddedBrowser({ onBeforeInput: (event, input) => titleBarGuestInput?.(event, input), confirmPrivateNavigation: async url => {
     if (!mainWindow || mainWindow.isDestroyed() || quitting) return false;
@@ -679,8 +694,10 @@ async function launch() {
     // Browser presentation restoration may finish after the initial page load. Allow its
     // initial zoom update to settle before sampling this explicit test zoom.
     for (let attempt = 0; attempt < 3; attempt++) {
+      mainWindow.webContents.setZoomFactor(1);
+      await new Promise(resolve => setTimeout(resolve, 120));
       mainWindow.webContents.setZoomFactor(zoom);
-      await new Promise(resolve => setTimeout(resolve, 500));
+      await new Promise(resolve => setTimeout(resolve, 400));
       const inverse = await mainWindow.webContents.executeJavaScript("Number(getComputedStyle(document.documentElement).getPropertyValue('--hg-tb-inverse-zoom'))");
       if (Math.abs(mainWindow.webContents.getZoomFactor() - zoom) < 0.01 && Math.abs(inverse - 1 / zoom) < 0.01) break;
     }
@@ -725,7 +742,7 @@ async function launch() {
     iconIncluded: Boolean(appIcon),
     iconSize: appIcon ? appIcon.getSize() : null,
   };
-  report.ok = Boolean(checks.ok && lifecycle.didFinishLoad && !lifecycle.mainFrameLoadError && !lifecycle.renderProcessGone && !lifecycle.uncaughtScriptError && security.nodeIntegration === false && security.contextIsolation === true && security.sandbox === true && security.webSecurity === true && security.preloadConfigured && security.preloadIsExpected && security.sessionPreloadCount === 0 && security.backgroundThrottling === false && desktopBridge.keys.join(',') === 'browser,completionNotifications,copyImage,onOpenSession,revealApiKey,testCompletionNotification' && desktopBridge.copyImage === 'function' && desktopBridge.revealApiKey === 'function' && desktopBridge.completionNotifications === true && desktopBridge.onOpenSession === 'function' && desktopBridge.testCompletionNotification === 'function' && desktopBridge.browserKeys.join(',') === 'act,activateTab,back,clearSiteData,closeTab,forward,getState,home,navigate,newTab,onState,openDevTools,openExternal,readPage,reload,reopenTab,screenshot,setPresentation,setViewport,snapshot,stop,visibility' && desktopBridge.browserState?.url === '' && desktopBridge.browserState?.loading === false && desktopBridge.browserState?.desktopZoomFactor > 0 && desktopBridge.browserState?.presentation?.mode === 'normal' && desktopBridge.attachmentTray === true && desktopBridge.attachmentInput === true && desktopBridge.titleBar?.menus?.join(',') === '文件,编辑,查看,帮助,桌宠' && desktopBridge.titleBar.title === '' && desktopBridge.titleBar.rootTop === 0 && desktopBridge.titleBar.barBottom > 0 && report.browserStartsWithoutGuest && report.browserStartsWithBlankTab && !security.noSandboxSwitch && !security.debugPortConfigured);
+  report.ok = Boolean(checks.ok && lifecycle.didFinishLoad && !lifecycle.mainFrameLoadError && !lifecycle.renderProcessGone && !lifecycle.uncaughtScriptError && security.nodeIntegration === false && security.contextIsolation === true && security.sandbox === true && security.webSecurity === true && security.preloadConfigured && security.preloadIsExpected && security.sessionPreloadCount === 0 && security.backgroundThrottling === false && desktopBridge.keys.join(',') === 'browser,completionNotifications,copyImage,onOpenSession,revealApiKey,testCompletionNotification' && desktopBridge.copyImage === 'function' && desktopBridge.revealApiKey === 'function' && desktopBridge.completionNotifications === true && desktopBridge.onOpenSession === 'function' && desktopBridge.testCompletionNotification === 'function' && desktopBridge.browserKeys.join(',') === 'act,activateTab,back,cancelDownload,clearDownloads,clearSiteData,closeTab,forward,getState,home,navigate,newTab,onDownloads,onState,openDevTools,openExternal,readPage,reload,reopenTab,revealDownload,screenshot,setPresentation,setViewport,snapshot,stop,visibility' && desktopBridge.browserState?.url === '' && desktopBridge.browserState?.loading === false && desktopBridge.browserState?.desktopZoomFactor > 0 && desktopBridge.browserState?.presentation?.mode === 'normal' && desktopBridge.attachmentTray === true && desktopBridge.attachmentInput === true && desktopBridge.titleBar?.menus?.join(',') === '文件,编辑,查看,帮助,桌宠' && desktopBridge.titleBar.title === '' && desktopBridge.titleBar.rootTop === 0 && desktopBridge.titleBar.barBottom > 0 && report.browserStartsWithoutGuest && report.browserStartsWithBlankTab && !security.noSandboxSwitch && !security.debugPortConfigured);
   const titleBarOk = Boolean(
     workspaceStartsClosed && titleBarThemes.every(item => item.menu === item.sidebar && item.chat === item.sidebar && item.caption === item.sidebar) &&
     titleBarLayout?.contain?.includes('layout') && titleBarLayout.contain.includes('paint')

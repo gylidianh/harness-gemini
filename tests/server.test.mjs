@@ -19,7 +19,7 @@ test('source starts an isolated service, serves the UI, and masks stored credent
   const base = `http://127.0.0.1:${server.address().port}`;
   const request = (route, options = {}) => fetch(base + route, { ...options, headers: { Origin: base, 'content-type': 'application/json', ...options.headers } });
   const status = await (await request('/api/status')).json();
-  assert.equal(status.version, '1.4.4');
+  assert.equal(status.version, '1.5.7');
   assert.equal(status.settingsReady, false);
   const page = await request('/');
   assert.equal(page.status, 200);

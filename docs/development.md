@@ -1,6 +1,6 @@
 # 源码与开发
 
-对应 Harness Gemini 1.4.4。返回 [项目首页](../README.md)。
+对应 Harness Gemini 1.5.7。返回 [项目首页](../README.md)。
 
 ## 包含哪些内容
 
@@ -16,7 +16,7 @@ tools/           开发启动、校验与打包工具
 tests/           使用独立临时数据的服务测试
 ```
 
-应用文件与已发布的 1.4.4 程序归档一致。`SOURCE-MANIFEST.json` 保存原始文件的 SHA-256，不包含本机路径；依赖通过锁文件安装，`node_modules` 不入库。
+应用文件与已发布的 1.5.7 程序归档一致。`SOURCE-MANIFEST.json` 保存原始文件的 SHA-256，不包含本机路径；依赖通过锁文件安装，`node_modules` 不入库。
 
 基础界面的原始 React / Vite 工程没有找到，本仓库只保留其编译产物。`dist/composer-controls.js`、`settings-layout.js`、`skills-ui.js`、`model-selector.js` 等新增 UI 模块是可读源文件。可以修改这些模块、桌面端和服务端，再随现有前端产物打包；不能从此仓库重新生成基础界面的 `dist/assets/index-*.js`。
 
@@ -29,7 +29,7 @@ git clone https://github.com/gylidianh/harness-gemini.git
 cd harness-gemini
 ```
 
-`v1.3.10` 标签在源码上传前已发布，保持原样；`v1.4.4` 及之后的标签都指向对应源码。
+`v1.3.10` 标签在源码上传前已发布，保持原样；已发布的 `v1.4.4` 和本次 `v1.5.7` 标签都指向对应源码。
 
 ## 环境与安装
 
@@ -68,6 +68,8 @@ npm start
 
 ## 检查与测试
 
+1.5.7 本次交付只执行静态校验与语法检查；下面的运行测试命令供开发者自行使用，本次未执行。
+
 ```powershell
 npm run check
 npm run verify:release
@@ -75,7 +77,7 @@ npm test
 ```
 
 - `check` 检查源码中的本机路径、疑似凭据、意外数据文件和 JavaScript 语法。
-- `verify:release` 比对应用文件与已发布 1.4.4 归档的校验值。代码修改后出现差异是预期结果。
+- `verify:release` 比对应用文件与已发布 1.5.7 归档的校验值。代码修改后出现差异是预期结果。
 - `test` 启动独立临时服务，验证版本、界面资源、配置掩码和会话创建，不请求外部模型。
 
 可在 Windows 上运行 `npm run smoke:desktop` 做桌面集成自检。结果保存在独立 `.local-data/smoke-*/report.json`。桌宠置顶等检查受桌面环境影响；应查看具体检查结果，不能把部分通过当作全部通过。
@@ -86,7 +88,7 @@ npm test
 npm run build:win
 ```
 
-输出位于被 Git 忽略的 `release/`。打包使用当前 `app/` 源码与已有前端产物，保留应用标识和升级路径，不包含开发数据。
+输出位于被 Git 忽略的 `release/`。仓库内打包配置使用 npm 下载的 Electron，而不是维护机器的本地 Electron 路径；已发布安装包本身不重新构建。打包使用当前 `app/` 源码与已有前端产物，保留应用标识和升级路径，不包含开发数据。
 
 自行构建的安装包可能因依赖解析、构建工具或时间戳不同而具有不同校验值。公开发行的安装包以对应 Release 附带的 SHA-256 为准。
 
