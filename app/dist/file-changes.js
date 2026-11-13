@@ -97,14 +97,89 @@ export function createFileChangesUI(React) {
       data.truncated && h('div', { className: 'hgfc-diff-banner' }, '差异过长，只显示前一部分。'));
   }
 
-  function FileRow({ sessionId, turn, file, busy, onApply }) {
+  // 1.5.8: copy the exact recorded absolute path, including spaces/non-ASCII characters.
+  // This does not open, modify or restore the file, even if it has been reverted/deleted.
+  function PathMenu({ menu, onClose, onToast }) {
+    const element = React.useRef(null);
+    const [position, setPosition] = React.useState({ left: menu.x, top: menu.y });
+    React.useLayoutEffect(() => {
+      const node = element.current;
+      if (!node) return;
+      setPosition({
+        left: Math.max(8, Math.min(menu.x, window.innerWidth - node.offsetWidth - 8)),
+        top: Math.max(8, Math.min(menu.y, window.innerHeight - node.offsetHeight - 8)),
+      });
+      node.querySelector('button')?.focus();
+    }, [menu]);
+    React.useEffect(() => {
+      const outside = event => { if (!element.current?.contains(event.target)) onClose(false); };
+      const dismiss = () => onClose(false);
+      document.addEventListener('pointerdown', outside, true);
+      document.addEventListener('contextmenu', outside, true);
+      document.addEventListener('scroll', dismiss, true);
+      window.addEventListener('resize', dismiss);
+      window.addEventListener('blur', dismiss);
+      return () => {
+        document.removeEventListener('pointerdown', outside, true);
+        document.removeEventListener('contextmenu', outside, true);
+        document.removeEventListener('scroll', dismiss, true);
+        window.removeEventListener('resize', dismiss);
+        window.removeEventListener('blur', dismiss);
+      };
+    }, [onClose]);
+    const copy = async () => {
+      // Invoke while the click/keyboard activation is still live; never report success early.
+      let closed = false;
+      try {
+        if (!navigator.clipboard?.writeText) throw new Error('当前环境无法访问剪贴板。');
+        const pending = navigator.clipboard.writeText(menu.path);
+        onClose(true);
+        closed = true;
+        await pending;
+        onToast('已复制产物路径', 'info');
+      } catch {
+        // A later rejection belongs to this copy, not a subsequently opened menu.
+        if (!closed) onClose(true);
+        onToast('复制路径失败，请检查剪贴板权限后重试。', 'error');
+      }
+    };
+    return h('div', {
+      ref: element, role: 'menu', 'aria-label': '产物操作', className: 'hgfc-path-menu', style: position,
+      onContextMenu: event => event.preventDefault(),
+      onKeyDown: event => {
+        if (event.key === 'Escape') { event.preventDefault(); event.stopPropagation(); onClose(true); }
+        else if (event.key === 'Tab') onClose(false);
+        else if (['ArrowDown', 'ArrowUp', 'Home', 'End'].includes(event.key)) { event.preventDefault(); element.current?.querySelector('button')?.focus(); }
+      },
+    }, h('button', { type: 'button', role: 'menuitem', onClick: copy, title: menu.path }, '复制路径'));
+  }
+
+  function FileRow({ sessionId, turn, file, busy, onApply, onPathMenu }) {
     const [open, setOpen] = React.useState(false);
     const reverted = file.state === 'reverted';
     const folder = folderOf(file.relative);
     return h('div', { className: `hgfc-file ${reverted ? 'reverted' : ''}` },
-      h('div', { className: 'hgfc-file-row' },
+      h('div', {
+        className: 'hgfc-file-row',
+        onContextMenu: event => {
+          if (typeof file.path !== 'string' || !file.path) return;
+          event.preventDefault(); event.stopPropagation();
+          const target = event.currentTarget.querySelector('.hgfc-file-main');
+          const rect = target?.getBoundingClientRect();
+          onPathMenu({ path: file.path, target,
+            x: event.clientX || rect?.left || 8, y: event.clientY || rect?.bottom || 8 });
+        },
+        onKeyDown: event => {
+          if (event.key !== 'ContextMenu' && !(event.shiftKey && event.key === 'F10')) return;
+          if (typeof file.path !== 'string' || !file.path) return;
+          event.preventDefault(); event.stopPropagation();
+          const target = event.currentTarget.querySelector('.hgfc-file-main');
+          const rect = target?.getBoundingClientRect();
+          onPathMenu({ path: file.path, target, x: rect?.left || 8, y: rect?.bottom || 8 });
+        },
+      },
         h('button', {
-          type: 'button', className: 'hgfc-file-main', title: file.path, 'aria-expanded': open,
+          type: 'button', className: 'hgfc-file-main', title: file.path, 'aria-expanded': open, 'aria-haspopup': 'menu',
           onClick: () => setOpen(value => !value),
         },
         h('span', { className: `hgfc-kind ${file.kind}` }, KIND_LABEL[file.kind] || '修改'),
@@ -122,7 +197,7 @@ export function createFileChangesUI(React) {
       open && h(DiffView, { sessionId, turnId: turn.turnId, file }));
   }
 
-  function TurnCard({ sessionId, turn, defaultOpen, busy, conflict, onApply, onForce, onDismiss }) {
+  function TurnCard({ sessionId, turn, defaultOpen, busy, conflict, onApply, onForce, onDismiss, onPathMenu }) {
     const [open, setOpen] = React.useState(defaultOpen);
     const reverted = turn.fileState === 'reverted';
     const label = turn.userText ? turn.userText : `第 ${turn.turnIndex} 轮`;
@@ -145,7 +220,7 @@ export function createFileChangesUI(React) {
           h('button', { type: 'button', className: 'hgfc-turn-btn danger', disabled: busy, onClick: onForce }, `仍然${conflict.action === 'revert' ? '撤回' : '恢复'}`),
           h('button', { type: 'button', className: 'hgfc-turn-btn', disabled: busy, onClick: onDismiss }, '保留现状'))),
       open && h('div', { className: 'hgfc-files' },
-        turn.files.map(file => h(FileRow, { key: file.path, sessionId, turn, file, busy, onApply }))));
+        turn.files.map(file => h(FileRow, { key: file.path, sessionId, turn, file, busy, onApply, onPathMenu }))));
   }
 
   function FileChangesSection({ sessionId, revision = 0, onToast, enabled = true }) {
@@ -154,6 +229,14 @@ export function createFileChangesUI(React) {
     const [busy, setBusy] = React.useState(false);
     const [conflicts, setConflicts] = React.useState({});
     const [collapsed, setCollapsed] = React.useState(false);
+    const [pathMenu, setPathMenu] = React.useState(null);
+    const pathMenuRef = React.useRef(null);
+    const openPathMenu = React.useCallback(menu => { pathMenuRef.current = menu; setPathMenu(menu); }, []);
+    const closePathMenu = React.useCallback(restoreFocus => {
+      const target = pathMenuRef.current?.target;
+      pathMenuRef.current = null; setPathMenu(null);
+      if (restoreFocus && target?.isConnected) target.focus({ preventScroll: true });
+    }, []);
     const ticket = React.useRef(0);
     const toast = React.useCallback((message, type) => { try { onToast?.(message, type); } catch { /* ignore */ } }, [onToast]);
 
@@ -168,7 +251,7 @@ export function createFileChangesUI(React) {
       }
     }, [sessionId, enabled]);
 
-    React.useEffect(() => { setData(null); setConflicts({}); setError(''); }, [sessionId, enabled]);
+    React.useEffect(() => { setData(null); setConflicts({}); setError(''); closePathMenu(false); }, [sessionId, enabled, closePathMenu]);
     React.useEffect(() => { load(); }, [load, revision]);
 
     const apply = async (turn, action, paths, force = false) => {
@@ -212,13 +295,14 @@ export function createFileChangesUI(React) {
       !error && !has && h('div', { className: 'hgfc-empty' }, data ? 'agent 在这个对话里还没有写入或下载文件。改动会记在这里，可以整轮或逐个文件撤回。' : '正在读取…'),
       has && !collapsed && h('div', { className: 'hgfc-turns' },
         turns.map((turn, index) => h(TurnCard, {
-          key: turn.turnId, sessionId, turn, defaultOpen: index === 0, busy,
+          key: turn.turnId, sessionId, turn, defaultOpen: index === 0, busy, onPathMenu: openPathMenu,
           conflict: conflicts[turn.turnId] || null,
           onApply: (t, action, paths) => apply(t, action, paths),
           onForce: () => { const c = conflicts[turn.turnId]; if (c) apply(turn, c.action, c.items.map(item => item.path), true); },
           onDismiss: () => setConflicts(prev => { const next = { ...prev }; delete next[turn.turnId]; return next; }),
         })),
-        h('div', { className: 'hgfc-footnote' }, '只记录 write_file 与 download_file 的改动；run_command 运行的命令改动的文件不在其中。')));
+        h('div', { className: 'hgfc-footnote' }, '只记录 write_file 与 download_file 的改动；run_command 运行的命令改动的文件不在其中。')),
+      pathMenu && h(PathMenu, { menu: pathMenu, onClose: closePathMenu, onToast: toast }));
   }
 
   return { FileChangesSection };

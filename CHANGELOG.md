@@ -1,5 +1,17 @@
 # 更新记录
 
+## 1.5.8
+
+[版本说明与下载](https://github.com/gylidianh/harness-gemini/releases/tag/v1.5.8)
+
+- JPEG 解析到真实结束标记后允许尾随字节，不裁剪或重编码；保留结构、尺寸及大小检查。
+- 产物文件条目右键“复制路径”，支持中文空格、菜单键和 Shift+F10，原有差异与撤回功能保持。
+- 修复旧复制请求延迟失败误关闭新菜单的交互竞态。
+- 原构建验证：JPEG 131、UI 29、文件改动 13、已有回归 12 项通过；隔离桌面自检通过。UI 剪贴板使用 stub，未验证系统剪贴板。
+- 发布前静态隐私审计未发现本机个人信息、会话记录或实际凭据。
+
+[完整 1.5.8 说明](docs/releases/1.5.8.md)
+
 ## 1.5.7
 
 [版本说明与下载](https://github.com/gylidianh/harness-gemini/releases/tag/v1.5.7)
@@ -40,4 +52,4 @@
 
 安装包：`Harness-Gemini-1.3.10-win-x64.exe`，Windows 10 / 11 x64。
 
-历史发行包仍可在 [全部 Releases](https://github.com/gylidianh/harness-gemini/releases) 中查看，用于版本对照和回退。首页与使用文档以 1.5.7 为准；界面截图仍为 1.4.4 演示图。
+历史发行包仍可在 [全部 Releases](https://github.com/gylidianh/harness-gemini/releases) 中查看，用于版本对照和回退。首页与使用文档以 1.5.8 为准；界面截图仍为 1.4.4 演示图。

@@ -1,11 +1,11 @@
 {
-  "version": "1.5.7",
-  "release": "https://github.com/gylidianh/harness-gemini/releases/tag/v1.5.7",
-  "installerSha256": "b7e9e306280f24752ca86a789ce5ba14d4900076950e4191f08fcbd18de7c8c0",
-  "installerBytes": 127946404,
-  "appArchiveSha256": "05c89a239d50b0e0eac752d1474732cdb4206739ecb6bd2d417fbe4731eec09b",
+  "version": "1.5.8",
+  "release": "https://github.com/gylidianh/harness-gemini/releases/tag/v1.5.8",
+  "installerSha256": "68e5f8d6ffebbf1fc70126de1f6068e2a50ee1b98628718267f8f137d3f50b45",
+  "installerBytes": 127947713,
+  "appArchiveSha256": "9e111d3eddbc64f817ccf1b20137d532e84d0746ea0ff7d9c46fa7e5fe5ca898",
   "scope": "Desktop, server, shared modules, editable UI modules, prebuilt frontend assets, icons and notices. Original React/Vite source is unavailable.",
-  "verification": "167 application files match the rebuilt 1.5.7 app.asar byte-for-byte. Static integrity and syntax checks only; application, installer, regression tests and benchmarks were not run.",
+  "verification": "167 application files match the 1.5.8 app.asar byte-for-byte. Original build verification: JPEG 131, UI 29 (clipboard stub), file-change 13, regressions 12 checks passed; isolated desktop smoke passed. Static privacy audit covered all 7472 ASAR files and the actual installer payload (78 files). Installer not executed; runtime privacy and unknown encoded secrets not guaranteed.",
   "excluded": [
     "node_modules",
     "runtime data",
@@ -472,13 +472,13 @@
     },
     {
       "path": "app/dist/file-changes.css",
-      "sha256": "dd7fe28b5ee0735d28f9ee696d353449a59c1e4ff215c5815c7fd5ccd7eef23a",
-      "bytes": 8727
+      "sha256": "f787149cabf3b93b5c43582768bfdfd27f21f3d0f417e5811d9a87a423dcea15",
+      "bytes": 9604
     },
     {
       "path": "app/dist/file-changes.js",
-      "sha256": "0597c3d3b5b8001eef35d7d61945eab7a3b797bc68339966c989407bc27dadb3",
-      "bytes": 15366
+      "sha256": "3cb138f3d1964e3c832ffa6c8ac854eabbbdb6bb04cb3415d470924982446a8c",
+      "bytes": 19866
     },
     {
       "path": "app/dist/index.html",
@@ -592,7 +592,7 @@
     },
     {
       "path": "app/package.json",
-      "sha256": "ae244527c4fe3683f993ed7d1dae6303049be5912a5f6871bbb07dec5736b2aa",
+      "sha256": "1cd44589a957d91e445db3faf5b4f098da6457da16e2ef87b1b6c1d7bb7f8d4d",
       "bytes": 732
     },
     {
@@ -712,8 +712,8 @@
     },
     {
       "path": "app/server/media.mjs",
-      "sha256": "a2427d889d791f6be0b1244ef2a028051d32668948c986b48a6a4607c501db2d",
-      "bytes": 12895
+      "sha256": "ba2bc3ac433e91e97a0c58b179084af397fb6c51359be622d3f32110f093e135",
+      "bytes": 13457
     },
     {
       "path": "app/server/metrics.mjs",

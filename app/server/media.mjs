@@ -65,15 +65,25 @@ function jpeg(bytes) {
     if (bytes[offset++] !== 0xff) invalid();
     while (bytes[offset] === 0xff) offset++;
     const marker = bytes[offset++];
-    if (marker === 0xd9) { if (!size || !scanned || offset !== bytes.length) invalid(); return size; }
+    if (marker === 0xd9) {
+      if (!size || !scanned) invalid();
+      // This EOI was reached by marker/length and entropy scanning, not a byte search:
+      // APP/EXIF thumbnail EOIs are skipped with their segment. JPEG decoders allow
+      // trailing bytes; keep the original buffer intact (and within the total size cap).
+      return size;
+    }
     if (marker === 0x00 || marker === 0xd8 || marker === undefined) invalid();
     if (marker >= 0xd0 && marker <= 0xd7) continue;
     if (offset + 2 > bytes.length) invalid();
     const length = bytes.readUInt16BE(offset);
     if (length < 2 || offset + length > bytes.length) invalid();
     if (sof.has(marker)) {
-      if (length < 8) invalid();
+      if (length < 8 || !bytes[offset + 7] || length !== 8 + 3 * bytes[offset + 7]) invalid();
       size = dimensions(bytes.readUInt16BE(offset + 5), bytes.readUInt16BE(offset + 3));
+    }
+    if (marker === 0xda) {
+      // An SOS must follow a frame and contain its complete component/header fields.
+      if (!size || length < 6 || !bytes[offset + 2] || bytes[offset + 2] > 4 || length !== 6 + 2 * bytes[offset + 2]) invalid();
     }
     offset += length;
     if (marker === 0xda) {
