@@ -500,6 +500,14 @@ export class Store {
           if (isObject(message.metrics)) message.metrics = { ...message.metrics, status: 'cancelled' };
           changed = true;
         }
+        for (const question of message.questions ?? []) {
+          if (question.status === 'pending') {
+            question.status = 'cancelled';
+            question.reason = 'interrupted';
+            question.error = '上次服务已中断；此提问已结束，请重新发送消息。';
+            changed = true;
+          }
+        }
         for (const tool of message.tools ?? []) {
           if (['running', 'pending'].includes(tool.status)) {
             tool.status = 'error'; tool.output = '上次服务已中断；此待处理请求已结束，请重新发送消息。'; changed = true;
@@ -753,6 +761,15 @@ export class Store {
     }
     if (!session) throw new HttpError(404, '会话不存在。');
     if (!isObject(session) || !Array.isArray(session.messages)) throw new HttpError(422, CORRUPT_SESSION_TEXT);
+    // 1.6.4: the checklist is conversation state. A session written before it lived there still
+    // has its list on the assistant message, so it is carried over on read — no disk migration.
+    if (!Array.isArray(session.tasks)) {
+      const last = [...session.messages].reverse()
+        .find(message => message?.role === 'assistant' && Array.isArray(message.tasks) && message.tasks.length);
+      session.tasks = last ? last.tasks : [];
+    }
+    // A list whose every step is done is finished work and is not resurrected.
+    if (session.tasks.length && !session.tasks.some(task => task?.status !== 'completed')) session.tasks = [];
     return this.withSessionMeta(session);
   }
 
@@ -760,7 +777,7 @@ export class Store {
     const now = new Date().toISOString();
     const id = randomUUID();
     const workspace = await fs.realpath(await this.ensureSessionWorkspace({ id }));
-    const session = { id, title, workspace, createdAt: now, updatedAt: now, messages: [] };
+    const session = { id, title, workspace, createdAt: now, updatedAt: now, messages: [], tasks: [] };
     await this.saveSession(session);
     return this.withSessionMeta(session);
   }

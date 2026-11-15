@@ -6,6 +6,12 @@ const BROWSER_COMMAND_CHANNEL = 'harness:browser-command';
 const BROWSER_STATE_CHANNEL = 'harness:browser-state';
 const COPY_IMAGE_CHANNEL = 'harness:copy-image';
 const REVEAL_API_KEY_CHANNEL = 'harness:reveal-api-key';
+// Private main-to-preload message only; never expose setters to page JavaScript.
+ipcRenderer.on('harness:window-zoom', (_event, payload) => {
+  if (!payload || Object.keys(payload).join(',') !== 'zoom' || !Number.isFinite(payload.zoom) || payload.zoom < 0.25 || payload.zoom > 5) return;
+  webFrame.setZoomFactor(payload.zoom);
+  window.dispatchEvent(new Event('resize'));
+});
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const subscribers = new Set();
 let pendingSessionId;

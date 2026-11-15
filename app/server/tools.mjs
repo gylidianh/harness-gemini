@@ -35,6 +35,7 @@ import { readWebPage, searchWeb } from './web.mjs';
 import { downloadFile, normalizeDownloadArgs, validateDownloadDestination } from './downloads.mjs';
 import { abortError, atomicWrite, boundedString, checkAbort, HttpError, isObject, listDirectory, readWorkspaceFile, requireObject, samePath, waitForChildExit, workspacePath } from './util.mjs';
 import { MAX_SCROLL_PIXELS, normalizeRequest } from '../shared/browser-input.mjs';
+import { normalizeQuestionArgs } from './questions.mjs';
 import { externalPathTargets, isExternalTool, runExternalSkill, validateExternalArgs } from './external-skills.mjs';
 
 /** How long a kill is given to report back before the direct process is killed as a fallback. */
@@ -101,8 +102,10 @@ const MAX_TASK_TEXT = 200;
  */
 export function normalizeTaskList(args) {
   const input = Array.isArray(args?.tasks) ? args.tasks : null;
-  if (!input || !input.length) throw new HttpError(400, '任务列表至少需要一项。');
-  if (input.length > MAX_TASKS) throw new HttpError(400, `任务列表最多 ${MAX_TASKS} 项。`);
+  // 1.6.4: an empty list clears the checklist. Submit [] only when every step is done; a list
+  // that is still needed must be sent whole, so an accidental empty call cannot hide progress.
+  if (!input) throw new HttpError(400, '任务清单必须是数组；提交空数组表示清除清单。');
+  if (input.length > MAX_TASKS) throw new HttpError(400, `任务清单最多 ${MAX_TASKS} 项。`);
   let active = false;
   const tasks = input.map((task, index) => {
     const text = typeof task?.text === 'string' ? task.text.replace(/\s+/g, ' ').trim() : '';
@@ -120,16 +123,27 @@ export function normalizeTaskList(args) {
 
 /** The list as it is handed to the model: a short confirmation, never the whole list again. */
 function taskToolResult(list) {
+  // 1.6.4: the reply is the reminder. Every update comes back saying the list is still the one to
+  // work from, so the next round neither re-plans the task nor forgets to clear a finished list.
   const next = list.tasks.find(task => task.status !== 'completed');
+  if (!list.total) {
+    return { tasks: [], total: 0, completed: 0, remaining: 0, next: null, cleared: true, note: '任务清单已清空。' };
+  }
   return {
     tasks: list.tasks, total: list.total, completed: list.completed,
     remaining: list.total - list.completed,
     ...(next ? { next: next.text } : { next: null }),
-    note: list.completed === list.total ? '任务清单已全部完成。' : '任务清单已记录，用户可以看到进度。',
+    note: list.completed === list.total
+      ? '任务清单已全部完成，可以提交空清单清除。'
+      : '任务清单已更新，请继续用这个清单跟踪进度。',
   };
 }
 
 export const AGENT_TOOLS = [
+  functionTool('ask_user', '需要用户确认需求、补充信息或做选择时，明确提出一个问题并等待用户手动回答；可提供最多8个选项，也允许用户自由输入。问题最多2000字符，每个选项最多200字符。不得自行选择、自动提交或猜测用户答案。回答只是对话信息，不是文件访问、命令执行或其它工具的批准，不能用它绕过权限审批。仅主代理与聊天可用，子代理不可用；停止、断连后提问会中断。', {
+    question: { type: 'string', minLength: 1, maxLength: 2000 },
+    options: { type: 'array', maxItems: 8, items: { type: 'string', minLength: 1, maxLength: 200 } },
+  }, ['question']),
   functionTool('list_directory', '列出文件夹。工作目录内读取可自动执行；外部路径按当前权限模式处理。被用户拒绝后不得尝试绕过。', { path: { type: 'string', description: '相对工作目录的路径或绝对路径，默认 .' } }),
   functionTool('read_file', '读取 UTF-8 普通文本文件，最多返回 200 KB。相对路径基于工作目录；外部访问按当前权限模式处理。', { path: { type: 'string' } }, ['path']),
   functionTool('write_file', '新建或完整替换 UTF-8 普通文件。按当前权限模式执行；智能模式只自动新建工作目录内尚不存在的文件。被用户拒绝后不得换路径或工具绕过。', { path: { type: 'string' }, content: { type: 'string' } }, ['path', 'content']),
@@ -157,9 +171,9 @@ export const AGENT_TOOLS = [
   }, ['action']),
   functionTool('browser_screenshot', '截取内置浏览器当前页面的屏幕图像，并以图片形式回传给模型，让模型真正看到排版、图表、颜色和渲染效果。文字读不出的视觉效果（布局、图形、样式）用它确认；只需要文字时用 browser_page_content 更快。截屏会保存在本会话工作目录并在对话中显示。', { timeoutMs: { type: 'integer', minimum: 1000, maximum: 60000, description: '等待页面加载的最长时间，默认25000毫秒' } }),
   functionTool('browser_page_content', '读取内置浏览器当前页面渲染后的可见文字和链接。用于页面在浏览器中变化后重新读取，或读取用户自己打开的页面。', { maxChars: { type: 'integer', minimum: 1000, maximum: 100000, description: '正文字符上限，默认20000' }, timeoutMs: { type: 'integer', minimum: 1000, maximum: 60000, description: '等待页面加载的最长时间，默认20000毫秒' } }),
-  functionTool('update_tasks', '记录或更新这次任务的任务清单，让用户看到进度。开始多步任务前先建立清单，之后每完成一步就用最新的完整清单再次调用：已完成的一项标为 completed，正在做的一项标为 in_progress，其余保持 pending。清单会显示在对话里，做完的条目会被划掉。单项任务不必调用。', {
+  functionTool('update_tasks', '记录或更新这次任务的任务清单，让用户看到进度。开始多步任务前先建立清单，之后每完成一步就用最新的完整清单再次调用（顺序保持不变）：已完成的一项标为 completed，正在做的一项标为 in_progress，其余保持 pending。清单会保留到后续轮次，接着它推进即可；全部完成后提交空清单清除，面板随之消失。清单会显示在活动面板，对话中显示进度摘要；做完的条目会被划掉。单项任务不必调用。', {
     tasks: {
-      type: 'array', description: `完整的任务清单，最多 ${MAX_TASKS} 项；每次都要给出全部条目，不只是变化的那些。`,
+      type: 'array', description: `完整的任务清单，最多 ${MAX_TASKS} 项；每次都要给出全部条目，不只是变化的那些；提交空数组 [] 表示清除清单。`,
       items: {
         type: 'object', additionalProperties: false, required: ['text', 'status'],
         properties: {
@@ -283,6 +297,7 @@ function validateArguments(name, args) {
     if (args.maxChars !== undefined && (!Number.isInteger(args.maxChars) || args.maxChars < 1_000 || args.maxChars > 100_000)) throw new HttpError(400, '网页正文上限必须是 1000 到 100000 的整数。');
   }
   if (name === 'download_file') normalizeDownloadArgs(args);
+  if (name === 'ask_user') normalizeQuestionArgs(args);
   if (name === 'update_tasks') normalizeTaskList(args);
   // The prompt travels straight into a child model request, so it is bounded here like any
   // other model-supplied text rather than at the point of use.
@@ -394,6 +409,7 @@ export async function planToolExecution(name, args, { workspace, approvalMode = 
   const target = await validateTool(name, args, workspace, { allowExternal: true });
   if (name === 'generate_image') return { requiresApproval: false, reason: '生成图片可自动执行。', access: { allowExternal: false } };
   // A task list changes nothing outside the conversation, so it never needs approval.
+  if (name === 'ask_user') return { requiresApproval: false, reason: '等待用户回答问题；回答不构成工具审批。', access: { allowExternal: false } };
   if (name === 'update_tasks') return { requiresApproval: false, reason: '记录任务清单可以自动执行。', access: { allowExternal: false } };
   if (name === 'spawn_subagent') return {
     requiresApproval: false,
@@ -480,6 +496,7 @@ export function approvalSummary(name, args, plan = {}) {
   if (name === 'list_directory') return `将列出文件夹：${target}。`;
   if (name === 'run_command') return `在工作目录执行命令（可能访问其它目录）：${args.command}`;
   if (name === 'generate_image') return '将使用配置的图片模型生成图片。';
+  if (name === 'ask_user') return `将向用户提问：${normalizeQuestionArgs(args).question}`;
   if (name === 'update_tasks') return `将更新任务清单（${normalizeTaskList(args).total} 项）。`;
   if (name === 'spawn_subagent') return `将把任务交给子代理：${String(args.prompt ?? '').split(/\r?\n/)[0].slice(0, 120)}`;
   if (name === 'web_search') return `将把搜索词发送到公开搜索服务：${args.query}`;
@@ -510,7 +527,7 @@ async function writeNewFile(workspace, requested, target, content, access, signa
   } finally { await file.close(); }
 }
 
-export async function executeTool(name, args, { workspace, signal, generateImage, access = {}, webOptions = {}, onProgress, requestBrowser, externalSkills, fileChanges = null }) {
+export async function executeTool(name, args, { workspace, signal, generateImage, access = {}, webOptions = {}, onProgress, requestBrowser, requestQuestion, externalSkills, fileChanges = null }) {
   checkAbort(signal);
   if (isExternalTool(name)) {
     const skill = externalSkillFor(name, externalSkills);
@@ -539,6 +556,11 @@ export async function executeTool(name, args, { workspace, signal, generateImage
   }
   if (name === 'run_command') return runCommand(workspace, args, signal, access);
   if (name === 'generate_image') return generateImage(args.prompt);
+  if (name === 'ask_user') {
+    const question = normalizeQuestionArgs(args);
+    if (typeof requestQuestion !== 'function') throw new HttpError(403, 'ask_user 仅主代理与聊天可用，子代理不可用。');
+    return requestQuestion(question);
+  }
   if (name === 'update_tasks') return taskToolResult(normalizeTaskList(args));
   if (name === 'web_search') return searchWeb(args, { ...webOptions, signal });
   if (name === 'fetch_url') return readWebPage(args, { ...webOptions, signal });
@@ -554,7 +576,7 @@ export async function executeTool(name, args, { workspace, signal, generateImage
     return downloaded;
   }
   if (BROWSER_TOOL_NAMES.has(name)) {
-    if (typeof requestBrowser !== 'function') throw new HttpError(501, '内置浏览器只在 Harness Gemini 桌面版中可用；当前环境请改用 fetch_url 读取网页。');
+    if (typeof requestBrowser !== 'function') throw new HttpError(501, '内置浏览器只在桌面运行环境中可用；当前环境请改用 fetch_url 读取网页。');
     const action = name === 'browser_navigate' ? 'navigate' : name === 'browser_open' ? 'open' : name === 'browser_snapshot' ? 'snapshot' : name === 'browser_act' ? 'act' : name === 'browser_screenshot' ? 'screenshot' : 'read';
     const result = await requestBrowser({ action, args, timeoutMs: (args.timeoutMs ?? BROWSER_TIMEOUT_DEFAULTS[name]) + 15_000 });
     if (action === 'screenshot') return storeScreenshot(workspace, result);

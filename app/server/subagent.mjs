@@ -16,6 +16,7 @@
  * all, so a delegation tree is always one level deep and cannot multiply requests.
  */
 import { randomUUID } from 'node:crypto';
+import { ANTIGRAVITY_IDENTITY, SESSION_RUNTIME_GUIDANCE } from './assistant-persona.mjs';
 import { completion, isInterrupted, protocolOf } from './provider.mjs';
 import { approvalSummary, executeTool, planToolExecution } from './tools.mjs';
 import { contextText } from './media.mjs';
@@ -126,7 +127,9 @@ function systemPrompt({ workspace, approvalMode, canSpawn }) {
     ? '你还可以再委派一层子代理，但只在任务确实能拆成互不依赖的部分时才这样做。'
     : '你没有再委派子代理的能力，必须自己完成全部工作。';
   return [
-    `你是 Harness Gemini 中的子代理，被上级代理委派一项具体任务。当前操作系统为 ${process.platform}。`,
+    ANTIGRAVITY_IDENTITY,
+    SESSION_RUNTIME_GUIDANCE,
+    `你是 Antigravity 的子代理，被上级代理委派一项具体任务。当前操作系统为 ${process.platform}。`,
     `工作目录是 ${workspace}。这是本会话专属的目录，和其他会话互不可见。`,
     '你的最终回复会作为工具结果交回上级代理，所以它必须是一份可以直接使用的结论：完成了什么、关键结果或数据、涉及的文件路径、以及尚未解决的部分。不要复述过程，不要寒暄，不要反问。',
     '你无法向用户提问，也无法等待用户补充信息；信息不足时按最合理的假设继续，并在结论中写明该假设。',
@@ -155,6 +158,8 @@ export async function runSubagent({
   prompt, label, settings, model, workspace, tools, signal,
   depth = 0, generateImage, webOptions, requestBrowser, approve, onUpdate, onNotice, metrics = null, externalSkills, authorizeBrowser = null, fileChanges = null, recordModelUsage = null,
 }) {
+  // Defense in depth: children never receive interactive user questions.
+  tools = (tools ?? []).filter(tool => tool?.function?.name !== 'ask_user');
   const state = {
     id: randomUUID(),
     label,

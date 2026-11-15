@@ -73,6 +73,15 @@ const TITLE_BAR_MENU_CHANNEL = 'harness:titlebar-menu';
 const TITLE_BAR_COLORS_CHANNEL = 'harness:titlebar-colors';
 const TITLE_BAR_FOCUS_CHANNEL = 'harness:titlebar-focus';
 const TITLE_BAR_KEYS_CHANNEL = 'harness:titlebar-keys';
+const WINDOW_ZOOM_CHANNEL = 'harness:window-zoom';
+// Hidden Chromium can defer a native zoom update. Commit the same value in the trusted
+// renderer rather than changing CSS geometry alone. No renderer-to-main privilege is added.
+function setWindowZoom(zoom) {
+  if (!Number.isFinite(zoom) || zoom < 0.25 || zoom > 5 || !mainWindow || mainWindow.isDestroyed()) return;
+  mainWindow.webContents.setZoomFactor(zoom);
+  if (ownUrl(mainWindow.webContents.getURL())) mainWindow.webContents.send(WINDOW_ZOOM_CHANNEL, { zoom });
+}
+
 // The overlay stops one pixel short so the bar's bottom border runs under the window buttons too.
 const HEX_COLOR = /^#[0-9a-f]{6}$/i;
 let titleBarColors = { color: '#ffffff', symbolColor: '#202124' };
@@ -694,9 +703,9 @@ async function launch() {
     // Browser presentation restoration may finish after the initial page load. Allow its
     // initial zoom update to settle before sampling this explicit test zoom.
     for (let attempt = 0; attempt < 3; attempt++) {
-      mainWindow.webContents.setZoomFactor(1);
+      setWindowZoom(1);
       await new Promise(resolve => setTimeout(resolve, 120));
-      mainWindow.webContents.setZoomFactor(zoom);
+      setWindowZoom(zoom);
       await new Promise(resolve => setTimeout(resolve, 400));
       const inverse = await mainWindow.webContents.executeJavaScript("Number(getComputedStyle(document.documentElement).getPropertyValue('--hg-tb-inverse-zoom'))");
       if (Math.abs(mainWindow.webContents.getZoomFactor() - zoom) < 0.01 && Math.abs(inverse - 1 / zoom) < 0.01) break;
@@ -714,7 +723,7 @@ async function launch() {
     })()`);
     titleBarZoom.push({ requestedZoom: zoom, ...geometry });
   }
-  mainWindow.webContents.setZoomFactor(1);
+  setWindowZoom(1);
   await new Promise(resolve => setTimeout(resolve, 300));
   const titleBarThemes = await mainWindow.webContents.executeJavaScript("(() => {\n  const html = document.documentElement, shell = document.querySelector('.app-shell');\n  const savedHtml = html.dataset.skin, savedShell = shell.dataset.skin;\n  const results = ['classic', 'claude', 'gemini-dark', 'luxe-noir', 'luxe-ivory'].map(skin => {\n    html.dataset.skin = shell.dataset.skin = skin;\n    const color = selector => getComputedStyle(document.querySelector(selector)).backgroundColor;\n    const sidebarStyle = getComputedStyle(document.querySelector('.sidebar'));\n    const sidebar = sidebarStyle.backgroundImage.match(/rgba?\\([^)]+\\)/)?.[0] ?? color('.sidebar');\n    return { skin, sidebar, menu: color('#hg-titlebar'), chat: color('.chat-header'),\n      caption: getComputedStyle(document.querySelector('.right-panel'), '::before').backgroundColor };\n  });\n  html.dataset.skin = savedHtml; shell.dataset.skin = savedShell;\n  return results;\n})()");
   const checks = await checkDesktopService({ origin, dataDir, workspace });

@@ -1,11 +1,11 @@
 {
-  "version": "1.5.8",
-  "release": "https://github.com/gylidianh/harness-gemini/releases/tag/v1.5.8",
-  "installerSha256": "68e5f8d6ffebbf1fc70126de1f6068e2a50ee1b98628718267f8f137d3f50b45",
-  "installerBytes": 127947713,
-  "appArchiveSha256": "9e111d3eddbc64f817ccf1b20137d532e84d0746ea0ff7d9c46fa7e5fe5ca898",
+  "version": "1.6.8",
+  "release": "https://github.com/gylidianh/harness-gemini/releases/tag/v1.6.8",
+  "installerSha256": "32f145a196085b803675860d8cd657dd756a521b14d9f32f9e26fe12f56890f4",
+  "installerBytes": 127960249,
+  "appArchiveSha256": "b47c91b25cb9d77d49d604c8be1eb8ee4b127b45b9ce36405d5c50dc48e87664",
   "scope": "Desktop, server, shared modules, editable UI modules, prebuilt frontend assets, icons and notices. Original React/Vite source is unavailable.",
-  "verification": "167 application files match the 1.5.8 app.asar byte-for-byte. Original build verification: JPEG 131, UI 29 (clipboard stub), file-change 13, regressions 12 checks passed; isolated desktop smoke passed. Static privacy audit covered all 7472 ASAR files and the actual installer payload (78 files). Installer not executed; runtime privacy and unknown encoded secrets not guaranteed.",
+  "verification": "171 application files match the 1.6.8 app.asar byte-for-byte, so the same privacy audit covers the packaged app content. Original build verification: JPEG 4, isolated service/UI 1, Node test suite 5 passed; two real-Electron follow regressions passed (fold, image load, reconnect, real mouse wheel; remaining distance to bottom <= 1 px). Source syntax and privacy audit over 202 files (124 text, 71 JavaScript) with no findings. Installer not executed; runtime privacy and unknown encoded secrets not guaranteed.",
   "excluded": [
     "node_modules",
     "runtime data",
@@ -15,11 +15,6 @@
     "local build logs and absolute paths"
   ],
   "files": [
-    {
-      "path": "app/THIRD-PARTY-NOTICES.md",
-      "sha256": "07b1d58bfccf50b6be502b3a1dd9059cb2048b21d78243c7c255f82f4a6db79b",
-      "bytes": 9151
-    },
     {
       "path": "app/build/icon.ico",
       "sha256": "9d86ea0066b500e133fe01609c8cbc6308728bbee95a194ac168f2fc072a30fe",
@@ -62,8 +57,8 @@
     },
     {
       "path": "app/desktop/main.mjs",
-      "sha256": "e3eb763148f5b7b1838144e68f6555071a23cae7e550a5fc261b450298159a23",
-      "bytes": 50518
+      "sha256": "7207717f114fe8b808d582a10dd8ba9b639ad87979ddf533ab8e120c592629ae",
+      "bytes": 50976
     },
     {
       "path": "app/desktop/native-affinity.mjs",
@@ -102,8 +97,8 @@
     },
     {
       "path": "app/desktop/preload.cjs",
-      "sha256": "ef1844f4ceb73bd61d7bf626819f4b7dd746e341e149615a1982d76d6a78f223",
-      "bytes": 45721
+      "sha256": "c877ccbb15d510678da42e6cbf07a04b04690e6028ecb9ab435b564100873ae6",
+      "bytes": 46099
     },
     {
       "path": "app/desktop/read-window-affinity.ps1",
@@ -139,6 +134,21 @@
       "path": "app/dist/advanced-settings.js",
       "sha256": "6656e91b47198bf6a43ea1ea18a4dd36a415f50634df87b4aaf2d5a2c44b0b8e",
       "bytes": 13382
+    },
+    {
+      "path": "app/dist/assets/brand-wordmark-CIbor7UQ.png",
+      "sha256": "d55cb5798085705bfc529eeb553ec437b6c45c69b54e0838ebe9717fa608ea4e",
+      "bytes": 25534
+    },
+    {
+      "path": "app/dist/assets/index-BbYfWXft.css",
+      "sha256": "54e25901f70adf1b0e89e9136930bab156ee71357679b5664ba225baa2b9ac46",
+      "bytes": 169755
+    },
+    {
+      "path": "app/dist/assets/index-BWW8q4t7.js",
+      "sha256": "9f01717770c3aa0182d175b5f9ca470c3b22ded5eb141033417a71e5e880ce27",
+      "bytes": 895910
     },
     {
       "path": "app/dist/assets/KaTeX_AMS-Regular-BQhdFMY1.woff2",
@@ -416,14 +426,14 @@
       "bytes": 5980
     },
     {
-      "path": "app/dist/assets/KaTeX_Size4-Regular-DWFBv043.ttf",
-      "sha256": "c647367d1dd4e162468717d020e1fc0f1dc5c26ebfdffbe55261713bf88c5877",
-      "bytes": 10364
-    },
-    {
       "path": "app/dist/assets/KaTeX_Size4-Regular-Dl5lxZxV.woff2",
       "sha256": "a4af7d414440a1c1790825cfb700cf9cf43b0f2c4b04f0ebc523011ad9853ec0",
       "bytes": 4928
+    },
+    {
+      "path": "app/dist/assets/KaTeX_Size4-Regular-DWFBv043.ttf",
+      "sha256": "c647367d1dd4e162468717d020e1fc0f1dc5c26ebfdffbe55261713bf88c5877",
+      "bytes": 10364
     },
     {
       "path": "app/dist/assets/KaTeX_Typewriter-Regular-C0xS9mPB.woff",
@@ -439,21 +449,6 @@
       "path": "app/dist/assets/KaTeX_Typewriter-Regular-D3Ib7_Hf.ttf",
       "sha256": "f01f3e87d9c6a61c0c081ceb577abd864eb00a612f7ac1620dd6915fad2ef5aa",
       "bytes": 27556
-    },
-    {
-      "path": "app/dist/assets/brand-wordmark-CIbor7UQ.png",
-      "sha256": "d55cb5798085705bfc529eeb553ec437b6c45c69b54e0838ebe9717fa608ea4e",
-      "bytes": 25534
-    },
-    {
-      "path": "app/dist/assets/index-BWW8q4t7.js",
-      "sha256": "441eb37c66f000e93201fc15b064bace260d83ad20beb403ef594d1ae7ebd941",
-      "bytes": 894261
-    },
-    {
-      "path": "app/dist/assets/index-BbYfWXft.css",
-      "sha256": "54e25901f70adf1b0e89e9136930bab156ee71357679b5664ba225baa2b9ac46",
-      "bytes": 169755
     },
     {
       "path": "app/dist/composer-controls.css",
@@ -482,8 +477,8 @@
     },
     {
       "path": "app/dist/index.html",
-      "sha256": "556bac6d8084bd9a03bf554131bd684c600d7ab1bf7afe17d717b7e4f50978f0",
-      "bytes": 931
+      "sha256": "901bdb303af748cec84d6b8e8436109c7e4781d5ddda1486e23b74c83849908f",
+      "bytes": 980
     },
     {
       "path": "app/dist/model-selector.css",
@@ -499,16 +494,6 @@
       "path": "app/dist/provider-brand-data.js",
       "sha256": "1f3f4f82472f07b658d7d92851015c84577d6ee3e57f1f935143bc4aa4a76203",
       "bytes": 11045
-    },
-    {
-      "path": "app/dist/provider-brands/LICENSE-LobeHub.txt",
-      "sha256": "add9d7531d1b21646317a8958e38fc727506fa39d24bdecb44154d943c82753a",
-      "bytes": 1064
-    },
-    {
-      "path": "app/dist/provider-brands/README.md",
-      "sha256": "fe42c3d656dffa681feb0c9b45c767630ff5e64490c6bc1ee692bc9726a58ab9",
-      "bytes": 1600
     },
     {
       "path": "app/dist/provider-brands/claude.svg",
@@ -531,6 +516,11 @@
       "bytes": 781
     },
     {
+      "path": "app/dist/provider-brands/LICENSE-LobeHub.txt",
+      "sha256": "add9d7531d1b21646317a8958e38fc727506fa39d24bdecb44154d943c82753a",
+      "bytes": 1064
+    },
+    {
       "path": "app/dist/provider-brands/manifest.json",
       "sha256": "7c22f9e901639cada53a3c8d470da0916dc11399bbc15c639981be31d684b28a",
       "bytes": 2629
@@ -549,6 +539,21 @@
       "path": "app/dist/provider-brands/qwen.svg",
       "sha256": "a158a0e3ed5b541e4f91384ece02c3acf0a0d81b7b11a46d77bafb248b09e32c",
       "bytes": 1016
+    },
+    {
+      "path": "app/dist/provider-brands/README.md",
+      "sha256": "fe42c3d656dffa681feb0c9b45c767630ff5e64490c6bc1ee692bc9726a58ab9",
+      "bytes": 1600
+    },
+    {
+      "path": "app/dist/reply-ui.css",
+      "sha256": "94e89e2bf99daea5285599c08464bfa179ec05fd0e64e3f94bfc06e0503d5a57",
+      "bytes": 9600
+    },
+    {
+      "path": "app/dist/reply-ui.js",
+      "sha256": "83ac20a6c52cfa7e4bea285a40415d38417d37bf4c98228bc37745c30b5fc862",
+      "bytes": 26777
     },
     {
       "path": "app/dist/session-tools.css",
@@ -592,13 +597,18 @@
     },
     {
       "path": "app/package.json",
-      "sha256": "1cd44589a957d91e445db3faf5b4f098da6457da16e2ef87b1b6c1d7bb7f8d4d",
+      "sha256": "22074d5ee9975540e22ffba0fef099fc34251bc2841b2bf2676b46a59fafdefe",
       "bytes": 732
     },
     {
       "path": "app/server/app.mjs",
-      "sha256": "260f95c4223c9d8b6886bf5dcb86b6013f1c846ec2612c69482ce182848e4ef2",
-      "bytes": 123914
+      "sha256": "deb4a553e93e8c0f5062c1cc79eb0adc68e245e32a446da7b66a6bd17cb4863c",
+      "bytes": 127985
+    },
+    {
+      "path": "app/server/assistant-persona.mjs",
+      "sha256": "d8210ab6976056867a00843b07c483be0d107b49dba92f8a39a87a0d2049ae56",
+      "bytes": 1968
     },
     {
       "path": "app/server/attachments.mjs",
@@ -629,11 +639,6 @@
       "path": "app/server/external-skill-baselines.json",
       "sha256": "9045d73eb32e1f8b06ff063ed65d151a40bcf9fa065a4fac51489d94ea126878",
       "bytes": 3671
-    },
-    {
-      "path": "app/server/external-skill-samples/README.md",
-      "sha256": "37a02d195b0b4ee4b94945efb8604c0785ccc69ca7ba07b16cefe2dd5d0fec55",
-      "bytes": 4183
     },
     {
       "path": "app/server/external-skill-samples/customs_validator/customs_validator.py",
@@ -689,6 +694,11 @@
       "path": "app/server/external-skill-samples/read_pdf/skill.json",
       "sha256": "45f6dcd8a2e57fe1274c2510ce181d261df63be70e86e871478e0e24891ac195",
       "bytes": 5307
+    },
+    {
+      "path": "app/server/external-skill-samples/README.md",
+      "sha256": "37a02d195b0b4ee4b94945efb8604c0785ccc69ca7ba07b16cefe2dd5d0fec55",
+      "bytes": 4183
     },
     {
       "path": "app/server/external-skills.mjs",
@@ -756,6 +766,11 @@
       "bytes": 81629
     },
     {
+      "path": "app/server/questions.mjs",
+      "sha256": "b127afe553300aa87821cb8ed0ca42c5260bfc89a853e5fe611c05588ca49d90",
+      "bytes": 4252
+    },
+    {
       "path": "app/server/read-guard.mjs",
       "sha256": "c6a185c6ff7b96b9cd207843196103e89ec29aa56cdfbaaa31ad22d9f0edccf4",
       "bytes": 3757
@@ -772,13 +787,13 @@
     },
     {
       "path": "app/server/store.mjs",
-      "sha256": "078b405d93d49538d933022b5ee21f9feb67840fff41e3add0ffc079feb3c015",
-      "bytes": 59014
+      "sha256": "7f924b3b708f6ba7372af6d4e804a90e2d708e3995dca6ce8196f328bfb65672",
+      "bytes": 60014
     },
     {
       "path": "app/server/subagent.mjs",
-      "sha256": "63c78638c32e64420d186753cf50578d6fc07ecea36d5a8eb09617a4aa1511b3",
-      "bytes": 38422
+      "sha256": "1a6db4dafefbffc0d34a7c4828649620135a25450076363b29ad747dbf456cd6",
+      "bytes": 38713
     },
     {
       "path": "app/server/tool-images.mjs",
@@ -787,8 +802,8 @@
     },
     {
       "path": "app/server/tools.mjs",
-      "sha256": "d2de485d1a4e9e66f75cd1e66d916eec30cd22c3097f8e61cb98449e7dbf803f",
-      "bytes": 51952
+      "sha256": "67bf612501fbc09458a92325b6e083b8329efb14e0e0c96e3a786cd3ad02e640",
+      "bytes": 54127
     },
     {
       "path": "app/server/usage-stats.mjs",
@@ -839,6 +854,11 @@
       "path": "app/shared/reasoning-effort.mjs",
       "sha256": "e6b3aeae05a8931f698e3653c5c49faa8357838bb9ae681bd8c4abd6ef53e1f7",
       "bytes": 8307
+    },
+    {
+      "path": "app/THIRD-PARTY-NOTICES.md",
+      "sha256": "07b1d58bfccf50b6be502b3a1dd9059cb2048b21d78243c7c255f82f4a6db79b",
+      "bytes": 9151
     },
     {
       "path": "app/third-party/ZCode-LICENSE.txt",

@@ -5,16 +5,17 @@ Windows 桌面 AI 工作台，在一个窗口中聊天、编程、生图和浏�
 [![版本](https://img.shields.io/github/v/release/gylidianh/harness-gemini)](https://github.com/gylidianh/harness-gemini/releases/latest)
 ![Windows x64](https://img.shields.io/badge/Windows-10%20%2F%2011%20x64-0078d4)
 
-**[下载 1.5.8 安装包](https://github.com/gylidianh/harness-gemini/releases/download/v1.5.8/Harness-Gemini-1.5.8-win-x64.exe)** · **[浏览源码](app/)** · [版本说明](CHANGELOG.md) · [使用指南](docs/usage.md) · [开发说明](docs/development.md) · [常见问题](docs/faq.md)
+**[下载 1.6.8 安装包](https://github.com/gylidianh/harness-gemini/releases/download/v1.6.8/Harness-Gemini-1.6.8-win-x64.exe)** · **[浏览源码](app/)** · [版本说明](CHANGELOG.md) · [使用指南](docs/usage.md) · [开发说明](docs/development.md) · [常见问题](docs/faq.md)
 
 ![Harness Gemini 1.4.4 主界面](docs/images/home-1.4.4.png)
 
-## 1.5.8 更新
+## 1.6.8 更新
 
-- 修复 JPEG 结束标记后带附加字节时被拒收的问题；保留原图及大小限制。
-- 产物文件条目新增右键“复制路径”，支持完整路径、中文空格及键盘操作。
-- 保留 1.5.7 的代理分类与会话删除清理修复。
-- [1.5.8 发布说明](docs/releases/1.5.8.md)；Release 提供安装包、源码 ZIP 和 SHA256 校验文件。
+- 图片加载与重排、缩略图替换、断线重连后消息重载，不再被当成「读者上滚」而打断会话的自动跟随底部。
+- 跟随状态与「↓ 最新消息」按钮由同一处派生，不再出现「悬在半空却没有按钮」或「已经贴底仍挂着按钮」。
+- 读者自己的滚轮、滚动条、键盘和触摸上滚仍立刻停止跟随；消息内嵌套滚动区不再误触发，内容不足一屏时也不会误关。
+- 输入框高度变化（附件、等待回答、进度行、多行输入）后重新贴底。
+- [1.6.8 发布说明](docs/releases/1.6.8.md)；Release 提供安装包、源码 ZIP 和 SHA256 校验文件。
 
 ## 功能
 
