@@ -16,23 +16,28 @@
  * all, so a delegation tree is always one level deep and cannot multiply requests.
  */
 import { randomUUID } from 'node:crypto';
+import { promises as fs } from 'node:fs';
 import { ANTIGRAVITY_IDENTITY, SESSION_RUNTIME_GUIDANCE } from './assistant-persona.mjs';
 import { completion, isInterrupted, protocolOf } from './provider.mjs';
 import { approvalSummary, executeTool, planToolExecution } from './tools.mjs';
 import { contextText } from './media.mjs';
-import { isExternalTool } from './external-skills.mjs';
+import { externalPathTargets, isExternalTool } from './external-skills.mjs';
+import { isMcpTool } from './mcp-manager.mjs';
 import { DUPLICATE, ToolImageLedger } from './tool-images.mjs'; // 1.2.3-image-ledger 1.2.3-image-dedup
 import { ReadGuard } from './read-guard.mjs';
 import { PdfPipeline } from './pdf-pipeline.mjs'; // 1.2.3-read-guard
-import { checkAbort, HttpError, safeError } from './util.mjs';
+import { checkAbort, HttpError, safeError, samePath } from './util.mjs';
 import { requestFits, requestImageRoom, trimToolResults } from './context.mjs';
 import { GenerationMetrics } from './metrics.mjs';
+import { TEAM_MEMBER_TOOL_NAMES } from './teams.mjs'; // 1.8.0
 
 /** Absolute delegation-depth cap. A child created at this depth is never offered the spawn tool. */
 export const MAX_SUBAGENT_DEPTH = 1;
 
 /** What one step may report back to the parent model. The parent's context is the scarce resource. */
 const MAX_STEP_OUTPUT = 6_000;
+/** Full read_file payload allowance (covers 200 KB UTF-8 text plus JSON string escaping overhead). */
+const MAX_READ_FILE_OUTPUT = 250_000;
 
 /** The child's terminal answer, which becomes the parent's tool result. */
 const MAX_FINAL_CHARS = 24_000;
@@ -119,6 +124,19 @@ function clip(value, limit) {
   return text.length > limit ? `${text.slice(0, limit)}\n…（已截断，原长 ${text.length} 个字符）` : text;
 }
 
+export function formatSubagentToolContent(stepName, output) {
+  const raw = contextText(JSON.stringify(output ?? null));
+  if (stepName === 'ext_read_pdf' || stepName === 'record_pdf_pages') return raw;
+  const limit = stepName === 'read_file' ? MAX_READ_FILE_OUTPUT : MAX_STEP_OUTPUT;
+  if (raw.length <= limit) return raw;
+  return JSON.stringify({
+    truncated: true,
+    tool: stepName,
+    totalChars: raw.length,
+    preview: raw.slice(0, limit),
+  });
+}
+
 function systemPrompt({ workspace, approvalMode, canSpawn }) {
   const rules = APPROVAL_RULES[approvalMode] ?? APPROVAL_RULES.ask;
   // 1.3.4: decided by the tools the child is actually given. The parent passes depth 0 but drops
@@ -156,7 +174,10 @@ export function normalizeSpawnArgs(args) {
  */
 export async function runSubagent({
   prompt, label, settings, model, workspace, tools, signal,
-  depth = 0, generateImage, webOptions, requestBrowser, approve, onUpdate, onNotice, metrics = null, externalSkills, authorizeBrowser = null, fileChanges = null, recordModelUsage = null,
+  depth = 0, generateImage, webOptions, requestBrowser, approve, onUpdate, onNotice, metrics = null, externalSkills, mcpManager = null, authorizeBrowser = null, fileChanges = null, recordModelUsage = null,
+  // 1.8.0: present only for an Agent Teams member. `takeInbox` hands over what teammates said,
+  // `run` executes the three board tools. A plain delegation passes nothing and is unchanged.
+  teamTools = null,
 }) {
   // Defense in depth: children never receive interactive user questions.
   tools = (tools ?? []).filter(tool => tool?.function?.name !== 'ask_user');
@@ -262,6 +283,16 @@ export async function runSubagent({
   try {
     for (let round = 0; rounds === 0 || round < rounds; round++) {
       checkAbort(signal);
+      // 1.8.0: what teammates said while this member was working. It is delivered at the start
+      // of a round, never into a request already in flight, so the history stays valid for every
+      // protocol. Draining means a message is handed over exactly once.
+      if (typeof teamTools?.takeInbox === 'function') {
+        const inbox = await teamTools.takeInbox();
+        for (const message of Array.isArray(inbox) ? inbox : []) {
+          if (!message) continue;
+          messages.push({ role: 'user', content: `队友的留言：${String(message).slice(0, 1_600)}` });
+        }
+      }
       state.rounds = round + 1;
       state.usage.requests += 1;
       await publish(true);
@@ -432,16 +463,23 @@ export async function runSubagent({
           // A child may only call what it was offered. Without this, a chat-mode child whose model
           // invents write_file or run_command would get past chat mode's read-only promise.
           if (!tools.some(tool => tool.function?.name === step.name)) throw new HttpError(403, `子代理没有被提供工具 ${String(step.name).slice(0, 100)}，不能调用。`);
-          const plan = step.name === 'record_pdf_pages'
-            ? { requiresApproval: false, reason: '保存本会话 PDF 页读取记录', access: 'workspace' }
-            : await planToolExecution(step.name, args, { workspace, approvalMode: settings.approvalMode, externalSkills });
+          // 1.8.0: a board tool belongs to the team, not to the workspace: it reads and writes
+          // only the shared board, so it needs no approval and no path resolution.
+          const teamManaged = typeof teamTools?.run === 'function' && TEAM_MEMBER_TOOL_NAMES.has(step.name);
+          const plan = teamManaged
+            ? { requiresApproval: false, reason: '团队协作工具只读写本团队的共享看板。', access: { allowExternal: false } }
+            : step.name === 'record_pdf_pages'
+              ? { requiresApproval: false, reason: '保存本会话 PDF 页读取记录', access: { allowExternal: false, expectedPath: await fs.realpath(workspace) } }
+              : await planToolExecution(step.name, args, { workspace, approvalMode: settings.approvalMode, externalSkills, mcpManager });
           if (plan.requiresApproval) {
             step.status = 'pending';
             await publish(true);
-            const approved = await approve({
-              step, summary: `${plan.reason}\n${approvalSummary(step.name, args, plan)}`, signal,
-              notify: () => publish(true),
-            });
+            const approved = typeof approve === 'function'
+              ? await approve({
+                step, summary: `${plan.reason}\n${approvalSummary(step.name, args, plan)}`, signal,
+                notify: () => publish(true),
+              })
+              : false;
             checkAbort(signal);
             if (!approved) throw new Error('用户拒绝执行该工具，未修改文件或运行命令。');
           }
@@ -449,16 +487,71 @@ export async function runSubagent({
           step.status = 'running';
           step.approvalId = step.approvalId ?? null;
           await publish(true);
-          const guardSkill = isExternalTool(step.name) ? externalSkills?.get?.(step.name) : null;
+          const rawGuardSkill = !isMcpTool(step.name) && isExternalTool(step.name) ? externalSkills?.get?.(step.name) : null;
+          const guardSkill = rawGuardSkill?.transport === 'mcp' ? null : rawGuardSkill;
           const managedPdf = step.name === 'ext_read_pdf' && (args?.resume === true || args?.review === true);
           const guarded = guardSkill && !managedPdf ? await readGuard.check(guardSkill, args, workspace) : { key: null };
           guardKeys.set(call.id, guarded);
-          const invoke = (name, input) => executeTool(name, input, {
-            workspace, signal, generateImage, access: plan.access, webOptions, requestBrowser, externalSkills, fileChanges,
+          const invoke = (name, input, customAccess = plan.access) => executeTool(name, input, {
+            workspace, signal, generateImage, access: customAccess, webOptions, requestBrowser, externalSkills, mcpManager, fileChanges,
           });
           if (guarded.output) output = guarded.output;
-          else if (step.name === 'record_pdf_pages') output = await pdfPipeline.record(args, input => invoke('ext_read_pdf', input));
-          else if (step.name === 'ext_read_pdf') output = await pdfPipeline.read(args, input => invoke(step.name, input));
+          else if (teamManaged) output = await teamTools.run(step.name, args);
+          else if (step.name === 'record_pdf_pages') {
+            const currentRoot = await fs.realpath(workspace);
+            if (plan.access?.expectedPath && !samePath(currentRoot, plan.access.expectedPath)) {
+              throw new HttpError(403, '工作目录的真实路径已变化，请重新确认。');
+            }
+            const continueRead = async nextInput => {
+              if (!tools.some(candidate => candidate.function?.name === 'ext_read_pdf')) {
+                throw new HttpError(403, '子代理没有被提供工具 ext_read_pdf，不能续读 PDF。');
+              }
+              const nextPlan = await planToolExecution('ext_read_pdf', nextInput, {
+                workspace, approvalMode: settings.approvalMode, externalSkills, mcpManager,
+              });
+              const pdfSkill = externalSkills?.get?.('ext_read_pdf');
+              const plannedTargets = pdfSkill && nextPlan.access?.expectedPath
+                ? await externalPathTargets(pdfSkill, nextInput, nextPlan.access.expectedPath)
+                : null;
+              if (nextPlan.requiresApproval) {
+                step.status = 'pending';
+                await publish(true);
+                let approved = false;
+                try {
+                  approved = typeof approve === 'function'
+                    ? await approve({
+                      step,
+                      summary: `${nextPlan.reason}\n${approvalSummary('ext_read_pdf', nextInput, nextPlan)}`,
+                      signal,
+                      notify: () => publish(true),
+                    })
+                    : false;
+                } finally {
+                  if (!signal.aborted) {
+                    step.status = 'running';
+                    step.approvalId = step.approvalId ?? null;
+                    await publish(true);
+                  }
+                }
+                checkAbort(signal);
+                if (!approved) throw new Error('用户拒绝执行该工具，未读取下一批 PDF 页面。');
+              }
+              checkAbort(signal);
+              const verifiedRoot = await fs.realpath(workspace);
+              if (nextPlan.access?.expectedPath && !samePath(verifiedRoot, nextPlan.access.expectedPath)) {
+                throw new HttpError(403, '工作目录的真实路径已变化，请重新确认。');
+              }
+              if (pdfSkill && plannedTargets) {
+                const currentTargets = await externalPathTargets(pdfSkill, nextInput, verifiedRoot);
+                if (currentTargets.length !== plannedTargets.length
+                  || currentTargets.some((target, idx) => target.external !== plannedTargets[idx].external || !samePath(target.absolute, plannedTargets[idx].absolute))) {
+                  throw new HttpError(403, '目标文件的真实路径已变化，请重新确认后再操作。');
+                }
+              }
+              return invoke('ext_read_pdf', nextInput, nextPlan.access);
+            };
+            output = await pdfPipeline.record(args, continueRead);
+          } else if (step.name === 'ext_read_pdf') output = await pdfPipeline.read(args, input => invoke(step.name, input));
           else output = await invoke(step.name, args);
           step.status = output?.timedOut || (typeof output?.exitCode === 'number' && output.exitCode !== 0) ? 'error' : 'done';
         } catch (error) {
@@ -471,28 +564,32 @@ export async function runSubagent({
         // A capture is separated from the result before it is logged: the child must receive the
         // bitmap as an image part, and a base64 blob in the step log would be re-sent every round.
         let capture = null;
-        if (step.name === 'browser_screenshot' && typeof output?.screenshot === 'string' && output.screenshot.startsWith('data:image/')) {
+        if (['browser_screenshot', 'computer_screenshot'].includes(step.name) && typeof output?.screenshot === 'string' && output.screenshot.startsWith('data:image/')) {
           capture = output.screenshot;
           delete output.screenshot;
         }
         // 1.2.3-skill-images: an external skill's images become one image turn for the child as well.
         const skillImages = [];
-        if ((isExternalTool(step.name) || step.name === 'record_pdf_pages') && output && typeof output === 'object' && 'visionImages' in output) {
+        if ((isExternalTool(step.name) || isMcpTool(step.name) || step.name === 'record_pdf_pages') && output && typeof output === 'object' && 'visionImages' in output) {
           for (const image of Array.isArray(output.visionImages) ? output.visionImages : []) {
             if (typeof image?.dataUrl === 'string' && image.dataUrl.startsWith('data:image/')) skillImages.push(image);
           }
           delete output.visionImages;
         }
         const guardedStep = guardKeys.get(call.id);
-        if (guardedStep && !guardedStep.output && output?.exitCode === 0 && output.result && !output.result.error) readGuard.record(guardedStep.key, output.result, skillImages.length > 0);
+        if (guardedStep && !guardedStep.output && output?.exitCode === 0 && output.result && !output.result.error) readGuard.record(guardedStep.key, output.result, skillImages.length > 0, guardedStep.dpi);
         if (output !== undefined) step.output = clip(typeof output === 'string' ? output : JSON.stringify(output, null, 2), MAX_STEP_OUTPUT);
         pdfOutcomes.push({ name: step.name, complete: output?.complete === true, finalAnswer: output?.finalAnswer });
         await publish(true);
-        // PDF metadata/records must remain valid JSON; the display card keeps its short limit.
-        const modelToolText = contextText(JSON.stringify(output));
-        messages.push({ role: 'tool', tool_call_id: call.id, content: ['ext_read_pdf', 'record_pdf_pages'].includes(step.name) ? modelToolText : modelToolText.slice(0, MAX_STEP_OUTPUT) });
-        if (capture && (toolImages.has(capture) || roundSeen.has(capture))) { roundImages.push({ message: { role: 'user', content: DUPLICATE('内置浏览器页面截图') }, track: false }); toolImages.noteDuplicate(); }
-        else if (capture) { roundSeen.add(capture); roundImages.push({ message: { role: 'user', content: [{ type: 'text', text: '以下是内置浏览器刚刚的页面截图，请直接观察图像内容。' }, { type: 'image_url', image_url: { url: capture } }] }, track: true }); }
+        // Tool outputs sent to the child model must remain valid closed JSON; read_file keeps its full 200 KB allowance.
+        const modelToolText = formatSubagentToolContent(step.name, output);
+        messages.push({ role: 'tool', tool_call_id: call.id, content: modelToolText });
+        const captureLabel = step.name === 'computer_screenshot' ? '桌面屏幕截图' : '内置浏览器页面截图';
+        const capturePrompt = step.name === 'computer_screenshot'
+          ? '以下是刚刚截取的屏幕或窗口图像，请直接观察图像内容。'
+          : '以下是内置浏览器刚刚的页面截图，请直接观察图像内容。';
+        if (capture && (toolImages.has(capture) || roundSeen.has(capture))) { roundImages.push({ message: { role: 'user', content: DUPLICATE(captureLabel) }, track: false }); toolImages.noteDuplicate(); }
+        else if (capture) { roundSeen.add(capture); roundImages.push({ message: { role: 'user', content: [{ type: 'text', text: capturePrompt }, { type: 'image_url', image_url: { url: capture } }] }, track: true }); }
         if (skillImages.length) {
           const content = [{ type: 'text', text: '以下是外置技能 ' + step.name + ' 返回的图片，请直接观察图像内容；涉及数字、编号时逐字核对，看不清的地方要明确说明，不要猜测。' }];
           const attachedThisStep = new Set();

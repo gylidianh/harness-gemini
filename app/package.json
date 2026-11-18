@@ -1,11 +1,16 @@
 {
   "name": "local-harness",
-  "version": "1.6.8",
-  "private": true,
+  "version": "2.0.2",
+  "license": "MIT",
   "type": "module",
   "main": "desktop/main.mjs",
   "author": "Harness Gemini",
   "description": "Harness Gemini for local chat, image generation, coding, and browsing",
+  "scripts": {
+    "build": "node ui/scripts/build.mjs",
+    "build:ui": "node ui/scripts/build.mjs",
+    "verify:ui": "node ui/scripts/verify-ui.mjs"
+  },
   "engines": {
     "node": ">=22.12"
   },

@@ -58,7 +58,7 @@ export async function checkPortUi({ window, store, origin, outputDir }) {
     await click('button[aria-label="打开设置"]');
     await wait("!!document.querySelector('.settings-nav')", 'settings navigation');
     result.sections = await evaluate("[...document.querySelectorAll('.settings-nav-item')].map(e=>e.textContent)");
-    for (const name of ['工作区', '任务提醒', '供应商', '外观', '技能']) {
+    for (const name of ['工作区', '任务提醒', '供应商', '外观', '技能', 'MCP']) {
       await evaluate(`[...document.querySelectorAll('.settings-nav-item')].find(e=>e.textContent===${JSON.stringify(name)}).click()`);
       await wait(`document.querySelector('#settings-title').textContent===${JSON.stringify(name)}`, `settings ${name}`);
     }

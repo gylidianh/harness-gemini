@@ -24,7 +24,7 @@ for (const relative of files) {
   if (!/\.(?:[cm]?js|json|md|txt|html|css|py|ps1|ya?ml|xml|config)$/i.test(relative)) continue;
   textCount++;
   const text = fs.readFileSync(file, 'utf8');
-  const privatePath = /[A-Z]:[\\/]+Users[\\/]+(?!Public(?:[\\/])|Default(?:[\\/])|<)[^\\/\s"']+/i.test(text) || /\/(?:Users|home)\/(?!user(?:\/)|username(?:\/)|<)[a-zA-Z0-9._-]+\//.test(text);
+  const privatePath = /[A-Z]:[\\/]+Users[\\/]+(?!(?:Public|Default)(?:[\\/]|[\s"']|$)|<)[^\\/\s"']+/i.test(text) || /\/(?:Users|home)\/(?!user(?:\/)|username(?:\/)|<)[a-zA-Z0-9._-]+\//.test(text);
   if (privatePath) problems.push(`${relative}: personal home path`);
   if (username.length >= 4 && new RegExp(`\\b${username.replace(/[.*+?^${}()|[\]\\]/g,'\\$&')}\\b`).test(text)) problems.push(`${relative}: current machine username`);
   if (/codex-clipboard-[0-9a-f-]{36}/i.test(text)) problems.push(`${relative}: clipboard filename`);

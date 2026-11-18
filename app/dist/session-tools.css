@@ -1,4 +1,9 @@
-/* 1.4.2: Ctrl+F in-conversation / cross-session search, session pinning, locking & one-click delete */
+/* ==========================================================================
+   Session Tools & In-Chat Search (session-tools.css)
+   - Ctrl+F inline / cross-session search bar & match highlights
+   - Sidebar session pinning, locking, badges & one-click cleanup controls
+   - Base Q&A map primitives shared with conversation-map.css
+   ========================================================================== */
 
 ::highlight(hg-find-all) {
   background-color: #fde047;
@@ -10,14 +15,16 @@
   color: #ffffff;
 }
 
-/* Search bar floating at top of main chat panel */
+/* Sticky search bar at top of main chat panel (lightweight, shadow-free) */
 .hg-find-bar {
   position: sticky;
   top: 0;
   z-index: 35;
-  background: var(--surface-raised, var(--surface));
-  border-bottom: 1px solid var(--line-strong, var(--line));
-  box-shadow: var(--shadow-2);
+  background: color-mix(in srgb, var(--surface-raised, var(--surface)) 94%, var(--bg, transparent));
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  border-bottom: 1px solid var(--line);
+  box-shadow: none;
   padding: 8px 20px;
   display: flex;
   flex-direction: column;
@@ -28,7 +35,7 @@
 @keyframes hg-find-slide {
   from {
     opacity: 0;
-    transform: translateY(-6px);
+    transform: translateY(-5px);
   }
   to {
     opacity: 1;
@@ -52,15 +59,16 @@
   align-items: center;
   gap: 8px;
   background: var(--bg);
-  border: 1px solid var(--line-strong);
-  border-radius: var(--radius-full);
-  padding: 4px 12px;
-  transition: border-color 0.15s, box-shadow 0.15s;
+  border: 1px solid var(--line-strong, var(--line));
+  border-radius: 10px;
+  padding: 5px 11px;
+  box-shadow: none;
+  transition: border-color 0.15s ease, background-color 0.15s ease;
 }
 
 .hg-find-input-wrap:focus-within {
   border-color: var(--accent);
-  box-shadow: 0 0 0 2px var(--accent-tonal);
+  box-shadow: none;
 }
 
 .hg-find-input-wrap > svg {
@@ -81,7 +89,7 @@
 }
 
 .hg-find-input::placeholder {
-  color: var(--subtle);
+  color: var(--subtle, var(--muted));
 }
 
 .hg-find-count {
@@ -112,15 +120,16 @@
   gap: 4px;
   min-width: 28px;
   height: 28px;
-  padding: 0 7px;
-  border-radius: var(--radius-sm);
+  padding: 0 8px;
+  border-radius: 7px;
   border: 1px solid transparent;
   background: transparent;
+  box-shadow: none;
   color: var(--text-secondary, var(--text));
   font-size: 12px;
   font-weight: 500;
   cursor: pointer;
-  transition: background 0.12s, color 0.12s, border-color 0.12s;
+  transition: background-color 0.14s ease, color 0.14s ease, border-color 0.14s ease;
 }
 
 .hg-find-btn:hover:not(:disabled) {
@@ -136,13 +145,13 @@
 .hg-find-btn.active {
   background: var(--accent-tonal);
   color: var(--accent);
-  border-color: var(--accent-tonal-strong, var(--accent));
+  border-color: color-mix(in srgb, var(--accent) 42%, var(--line));
 }
 
 .hg-find-scope-btn {
   padding: 0 10px;
-  border-radius: var(--radius-full);
-  border: 1px solid var(--line-strong);
+  border-radius: 999px;
+  border: 1px solid var(--line-strong, var(--line));
   font-size: 12px;
 }
 
@@ -153,8 +162,9 @@
   max-height: 240px;
   overflow-y: auto;
   border: 1px solid var(--line);
-  border-radius: var(--radius-md);
+  border-radius: 10px;
   background: var(--bg);
+  box-shadow: none;
   padding: 4px;
   display: flex;
   flex-direction: column;
@@ -178,22 +188,23 @@
   width: 100%;
   text-align: left;
   padding: 7px 10px;
-  border: 0;
-  border-radius: var(--radius-sm);
+  border: 1px solid transparent;
+  border-radius: 8px;
   background: transparent;
+  box-shadow: none;
   color: var(--text);
   cursor: pointer;
-  transition: background 0.12s;
+  transition: background-color 0.12s ease, border-color 0.12s ease;
 }
 
-.hg-find-result-item:hover,
-.hg-find-result-item.current {
+.hg-find-result-item:hover {
   background: var(--hover);
 }
 
 .hg-find-result-item.current {
-  outline: 1px solid var(--accent);
+  border-color: color-mix(in srgb, var(--accent) 50%, var(--line));
   background: var(--accent-tonal);
+  outline: none;
 }
 
 .hg-find-result-top {
@@ -208,7 +219,7 @@
 .hg-find-result-badge {
   font-size: 10px;
   padding: 1px 6px;
-  border-radius: var(--radius-full);
+  border-radius: 999px;
   background: var(--accent-tonal);
   color: var(--accent);
   font-weight: 500;
@@ -236,33 +247,34 @@
   font-weight: 500;
 }
 
-/* Message pulse when jumped to via Ctrl+F */
+/* Message highlight outline when jumped to via search */
 .message[data-find-active="true"] {
-  outline: 2px solid var(--accent);
+  outline: 1.5px solid var(--accent);
   outline-offset: 4px;
-  border-radius: var(--radius-lg);
-  transition: outline-color 0.2s;
+  border-radius: var(--radius-lg, 12px);
+  transition: outline-color 0.2s ease;
 }
 
 /* Fallback inline mark when CSS.highlights is unavailable */
 mark.hg-find-mark {
   background-color: #fde047;
   color: #111827;
-  border-radius: 2px;
-  padding: 0 1px;
+  border-radius: 3px;
+  padding: 0 2px;
 }
 
 mark.hg-find-mark-current {
   background-color: #f97316;
   color: #ffffff;
-  border-radius: 2px;
+  border-radius: 3px;
   padding: 0 2px;
-  box-shadow: 0 0 0 2px rgba(249, 115, 22, 0.35);
+  box-shadow: none;
 }
 
-/* Sidebar session header & one-click delete button */
+/* ------------------------------------------- Sidebar Session List Controls */
+
 .session-list-label {
-  padding: 20px 10px 8px 12px !important;
+  padding: 18px 10px 8px 12px !important;
   gap: 6px;
 }
 
@@ -283,15 +295,16 @@ mark.hg-find-mark-current {
   display: inline-flex;
   align-items: center;
   gap: 4px;
-  padding: 3px 8px;
-  border-radius: var(--radius-full);
-  border: 1px solid var(--line-strong);
+  padding: 3px 9px;
+  border-radius: 999px;
+  border: 1px solid var(--line);
   background: transparent;
+  box-shadow: none;
   color: var(--muted);
   font-size: 11px;
   font-weight: 500;
   cursor: pointer;
-  transition: background 0.14s, color 0.14s, border-color 0.14s;
+  transition: background-color 0.14s ease, color 0.14s ease, border-color 0.14s ease;
   margin-left: auto;
 }
 
@@ -308,7 +321,7 @@ mark.hg-find-mark-current {
 
 /* Session row pin / lock / delete controls */
 .session-row.is-pinned {
-  background: color-mix(in srgb, var(--accent-tonal) 38%, transparent);
+  background: color-mix(in srgb, var(--accent-tonal) 36%, transparent);
 }
 
 .session-row.is-pinned.active {
@@ -353,7 +366,7 @@ mark.hg-find-mark-current {
 .session-actions {
   display: none;
   align-items: center;
-  gap: 1px;
+  gap: 2px;
   margin-right: 5px;
   flex-shrink: 0;
 }
@@ -367,15 +380,16 @@ mark.hg-find-mark-current {
   width: 26px !important;
   height: 26px !important;
   margin: 0 !important;
-  border-radius: var(--radius-sm);
+  border-radius: 6px;
   color: var(--muted);
   display: inline-flex;
   align-items: center;
   justify-content: center;
   background: transparent;
+  box-shadow: none !important;
   border: 0;
   cursor: pointer;
-  transition: background 0.12s, color 0.12s;
+  transition: background-color 0.12s ease, color 0.12s ease;
 }
 
 .session-action-btn:hover:not(:disabled) {
@@ -407,8 +421,8 @@ mark.hg-find-mark-current {
   flex-direction: column;
   gap: 8px;
   margin: -10px 0 20px;
-  padding: 10px 12px;
-  border-radius: var(--radius-md);
+  padding: 11px 13px;
+  border-radius: 10px;
   background: var(--sidebar, var(--hover));
   border: 1px solid var(--line);
   font-size: 12px;
@@ -434,7 +448,7 @@ mark.hg-find-mark-current {
   font-size: 12px;
 }
 
-/* Chat header lock indicator */
+/* Chat header pin/lock indicator */
 .chat-heading-badges {
   display: inline-flex;
   align-items: center;
@@ -448,7 +462,7 @@ mark.hg-find-mark-current {
   align-items: center;
   gap: 3px;
   padding: 1px 7px;
-  border-radius: var(--radius-full);
+  border-radius: 999px;
   font-size: 11px;
   font-weight: 500;
   line-height: 1.5;
@@ -462,4 +476,167 @@ mark.hg-find-mark-current {
 .chat-heading-badge.locked {
   background: var(--amber-tonal);
   color: var(--amber);
+}
+
+/* ------------------------------------------- Shared Conversation Map Nodes */
+
+.hg-map {
+  max-width: 900px;
+  width: 100%;
+  margin: 0 auto;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.hg-map-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 11px;
+  color: var(--muted);
+  padding: 0 2px;
+}
+
+.hg-map-heading {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-secondary, var(--text));
+}
+
+.hg-map-count {
+  font-variant-numeric: tabular-nums;
+}
+
+.hg-map-hint {
+  margin-left: auto;
+  color: var(--subtle, var(--muted));
+}
+
+.hg-map-close {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  box-shadow: none;
+  color: var(--muted);
+  cursor: pointer;
+  transition: background-color 0.12s ease, color 0.12s ease;
+}
+
+.hg-map-close:hover {
+  background: var(--hover);
+  color: var(--text);
+}
+
+.hg-map-empty {
+  font-size: 12px;
+  color: var(--muted);
+  text-align: center;
+  padding: 14px 12px;
+  border: 1px dashed var(--line-strong, var(--line));
+  border-radius: 10px;
+  box-shadow: none;
+}
+
+.hg-map-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  max-height: min(34vh, 300px);
+  overflow-y: auto;
+  padding: 2px;
+  scrollbar-width: thin;
+}
+
+.hg-map-card {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  width: 100%;
+  text-align: left;
+  padding: 10px 12px;
+  border-radius: 10px;
+  border: 1px solid var(--line);
+  background: var(--sidebar, var(--hover));
+  box-shadow: none !important;
+  color: var(--text);
+  font: inherit;
+  cursor: pointer;
+  transition: background-color 0.14s ease, border-color 0.14s ease;
+}
+
+.hg-map-card:hover {
+  background: var(--hover);
+  border-color: var(--line-strong, var(--line));
+  box-shadow: none !important;
+}
+
+.hg-map-card.is-current {
+  border-color: color-mix(in srgb, var(--accent) 55%, var(--line));
+  background: var(--accent-tonal);
+  box-shadow: none !important;
+}
+
+.hg-map-card-top {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+}
+
+.hg-map-card-question {
+  flex: 1;
+  min-width: 0;
+  font-size: 13px;
+  font-weight: 600;
+  line-height: 1.45;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.hg-map-card-time {
+  flex-shrink: 0;
+  font-size: 11px;
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.hg-map-card-answer {
+  display: flex;
+  align-items: flex-start;
+  gap: 6px;
+  color: var(--muted);
+}
+
+.hg-map-card-answer > svg {
+  flex-shrink: 0;
+  margin-top: 2px;
+  color: var(--accent);
+}
+
+.hg-map-card-preview {
+  font-size: 12px;
+  line-height: 1.55;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.hg-map-card mark {
+  background: #fde047;
+  color: #111827;
+  border-radius: 3px;
+  padding: 0 2px;
+  font-weight: 500;
 }

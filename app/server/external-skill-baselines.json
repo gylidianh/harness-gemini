@@ -74,6 +74,22 @@
         "read_doc.py",
         "word_worker.ps1"
       ]
+    },
+    {
+      "name": "hsci_mcp",
+      "revision": "1-hsci-mcp",
+      "files": [
+        "skill.json",
+        "README.md"
+      ]
+    },
+    {
+      "name": "hsci_query",
+      "revision": "1-hsci-query",
+      "files": [
+        "skill.json",
+        "README.md"
+      ]
     }
   ]
 }

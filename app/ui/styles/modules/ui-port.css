@@ -1,0 +1,26 @@
+/* ==========================================================================
+   Desktop Window Frame & Theme Surface Alignment (ui-port.css)
+   Aligns the Settings Workbench modal with the single-row desktop titlebar
+   inset (--hg-top-inset) and refines Luxe Noir dark popover surfaces.
+   ========================================================================== */
+
+.app-shell[data-skin] .settings-drawer.settings-workbench {
+  top: auto !important;
+  height: min(800px, calc(100dvh - var(--hg-top-inset, 0px) - 56px));
+}
+
+@media (width <= 760px) {
+  .app-shell[data-skin] .settings-drawer.settings-workbench {
+    height: calc(100dvh - var(--hg-top-inset, 0px) - 24px);
+  }
+}
+
+.app-shell[data-skin="luxe-noir"] .skill-menu,
+.app-shell[data-skin="luxe-noir"] .permission-menu,
+.app-shell[data-skin="luxe-noir"] .reasoning-menu,
+.app-shell[data-skin="luxe-noir"] .browser-popover,
+html[data-skin="luxe-noir"] .context-panel {
+  background: #181612;
+  border-color: var(--line-strong);
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.36);
+}

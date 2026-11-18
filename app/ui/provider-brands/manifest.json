@@ -1,0 +1,48 @@
+{
+  "retrievedAt": "2026-10-31",
+  "lobeIconsRevision": "d044bd0413f3a7b8aa6dfd95a67be8240bf4cb0b",
+  "assets": {
+    "deepseek": {
+      "file": "deepseek.svg",
+      "source": "https://raw.githubusercontent.com/lobehub/lobe-icons/d044bd0413f3a7b8aa6dfd95a67be8240bf4cb0b/packages/static-svg/icons/deepseek-color.svg",
+      "sha256": "deba5f98a5c1796e20fcac3149bcd7eb8a32f0bdd04d048819400b1f28bd1439",
+      "origin": "LobeHub Icons brand artwork (MIT; trademarks remain with owners)"
+    },
+    "openai": {
+      "file": "openai.svg",
+      "source": "https://raw.githubusercontent.com/lobehub/lobe-icons/d044bd0413f3a7b8aa6dfd95a67be8240bf4cb0b/packages/static-svg/icons/openai.svg",
+      "sha256": "a595df6b423920c67a7f8f73c063e4bfb72d415948097b6cac063a2366bb5186",
+      "origin": "LobeHub Icons brand artwork (MIT; trademarks remain with owners)"
+    },
+    "claude": {
+      "file": "claude.svg",
+      "source": "https://claude.com/icon.svg",
+      "sha256": "b150888bc7257af83e3b85d3c2be4294f88986026f8168f6c12fc1fde6697350",
+      "origin": "Claude official website"
+    },
+    "gemini": {
+      "file": "gemini.svg",
+      "source": "https://raw.githubusercontent.com/lobehub/lobe-icons/d044bd0413f3a7b8aa6dfd95a67be8240bf4cb0b/packages/static-svg/icons/gemini-color.svg",
+      "sha256": "8ab0a9bafec11f7e69bcb9fc4ffd8f1bc927d1ddcbbb6ff36dee5ae8b5a9d602",
+      "origin": "LobeHub Icons brand artwork (MIT; trademarks remain with owners)"
+    },
+    "openrouter": {
+      "file": "openrouter.svg",
+      "source": "https://raw.githubusercontent.com/lobehub/lobe-icons/d044bd0413f3a7b8aa6dfd95a67be8240bf4cb0b/packages/static-svg/icons/openrouter.svg",
+      "sha256": "ae671cc83de9bd45db97a47ed5e38a4e1bd9f93a12be495ba4b4f8b284026bca",
+      "origin": "LobeHub Icons brand artwork (MIT; trademarks remain with owners)"
+    },
+    "qwen": {
+      "file": "qwen.svg",
+      "source": "https://raw.githubusercontent.com/lobehub/lobe-icons/d044bd0413f3a7b8aa6dfd95a67be8240bf4cb0b/packages/static-svg/icons/qwen-color.svg",
+      "sha256": "a158a0e3ed5b541e4f91384ece02c3acf0a0d81b7b11a46d77bafb248b09e32c",
+      "origin": "LobeHub Icons brand artwork (MIT; trademarks remain with owners)"
+    },
+    "kimi": {
+      "file": "kimi.svg",
+      "source": "https://raw.githubusercontent.com/lobehub/lobe-icons/d044bd0413f3a7b8aa6dfd95a67be8240bf4cb0b/packages/static-svg/icons/kimi-color.svg",
+      "sha256": "0bdb95375d7c6e90a1850e91cd36770da2bc98fa33ec2d783f4a8fed027da85f",
+      "origin": "LobeHub Icons brand artwork (MIT; trademarks remain with owners)"
+    }
+  }
+}

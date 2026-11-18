@@ -1,4 +1,7 @@
-/* 1.4.6: 用量统计 — local token & conversation usage dashboard in Settings */
+/* ==========================================================================
+   Local Token & Conversation Usage Dashboard (usage-stats.css)
+   Lifetime KPI strip, 52-week activity heatmap, SVG trend lines & donut share.
+   ========================================================================== */
 
 :root {
   --hgus-chart-1: #0b7fff;
@@ -14,8 +17,8 @@
   --hgus-heatmap-4: color-mix(in srgb, var(--accent) 90%, var(--surface));
 }
 
-html[data-skin=gemini-dark],
-.app-shell[data-skin=gemini-dark] {
+html[data-skin="gemini-dark"],
+.app-shell[data-skin="gemini-dark"] {
   --hgus-chart-1: #4099ff;
   --hgus-chart-2: #46bf72;
   --hgus-chart-3: #9e77ed;
@@ -29,8 +32,8 @@ html[data-skin=gemini-dark],
   --hgus-heatmap-4: color-mix(in srgb, #80beff 88%, var(--surface));
 }
 
-html[data-skin=luxe-noir],
-.app-shell[data-skin=luxe-noir] {
+html[data-skin="luxe-noir"],
+.app-shell[data-skin="luxe-noir"] {
   --hgus-chart-1: #d4af6a;
   --hgus-chart-2: #72b896;
   --hgus-chart-3: #9c82e8;
@@ -51,19 +54,22 @@ html[data-skin=luxe-noir],
   min-width: 0;
 }
 
+/* ----------------------------------------------------- Lifetime KPI Strip */
+
 .hgus-lifetime-strip {
   display: flex;
   align-items: center;
   border: 1px solid var(--line);
-  border-radius: 14px;
-  background: color-mix(in srgb, var(--sidebar) 55%, var(--surface));
+  border-radius: 13px;
+  background: color-mix(in srgb, var(--sidebar) 50%, var(--surface));
+  box-shadow: none;
   overflow: hidden;
 }
 
 .hgus-lifetime-item {
   flex: 1 1 0;
   min-width: 0;
-  padding: 13px 12px;
+  padding: 14px 12px;
   text-align: center;
 }
 
@@ -93,11 +99,14 @@ html[data-skin=luxe-noir],
   flex-shrink: 0;
 }
 
+/* ------------------------------------------------------- Cards & Heatmap */
+
 .hgus-card {
   border: 1px solid var(--line);
-  border-radius: 14px;
-  background: color-mix(in srgb, var(--sidebar) 45%, var(--surface));
-  padding: 14px 16px;
+  border-radius: 13px;
+  background: color-mix(in srgb, var(--sidebar) 42%, var(--surface));
+  box-shadow: none;
+  padding: 15px 16px;
   min-width: 0;
 }
 
@@ -146,15 +155,16 @@ html[data-skin=luxe-noir],
 .hgus-tab {
   height: 24px;
   padding: 0 10px;
-  border: 0;
+  border: 1px solid transparent;
   border-radius: 999px;
   background: transparent;
+  box-shadow: none;
   color: var(--muted);
   font: inherit;
   font-size: 11.5px;
   font-weight: 500;
   cursor: pointer;
-  transition: background-color .12s, color .12s;
+  transition: background-color 0.12s ease, color 0.12s ease, border-color 0.12s ease;
 }
 
 .hgus-tab:hover {
@@ -163,8 +173,9 @@ html[data-skin=luxe-noir],
 
 .hgus-tab.active {
   background: var(--surface);
+  border-color: var(--line);
   color: var(--text);
-  box-shadow: 0 1px 2px #00000018;
+  box-shadow: none;
 }
 
 .hgus-heatmap-grid {
@@ -187,17 +198,31 @@ html[data-skin=luxe-noir],
   min-width: 0;
   border-radius: 3px;
   border: 1px solid transparent;
-  transition: transform .1s ease, border-color .1s ease;
+  transition: transform 0.1s ease, border-color 0.1s ease;
 }
 
-.hgus-heatmap-cell.level-0 { background-color: var(--hgus-heatmap-0); }
-.hgus-heatmap-cell.level-1 { background-color: var(--hgus-heatmap-1); }
-.hgus-heatmap-cell.level-2 { background-color: var(--hgus-heatmap-2); }
-.hgus-heatmap-cell.level-3 { background-color: var(--hgus-heatmap-3); }
-.hgus-heatmap-cell.level-4 { background-color: var(--hgus-heatmap-4); }
+.hgus-heatmap-cell.level-0 {
+  background-color: var(--hgus-heatmap-0);
+}
+
+.hgus-heatmap-cell.level-1 {
+  background-color: var(--hgus-heatmap-1);
+}
+
+.hgus-heatmap-cell.level-2 {
+  background-color: var(--hgus-heatmap-2);
+}
+
+.hgus-heatmap-cell.level-3 {
+  background-color: var(--hgus-heatmap-3);
+}
+
+.hgus-heatmap-cell.level-4 {
+  background-color: var(--hgus-heatmap-4);
+}
 
 .hgus-heatmap-cell.has-usage {
-  border-color: color-mix(in srgb, var(--line-strong) 55%, transparent);
+  border-color: color-mix(in srgb, var(--line-strong, var(--line)) 50%, transparent);
 }
 
 .hgus-heatmap-cell:hover,
@@ -223,7 +248,7 @@ html[data-skin=luxe-noir],
 
 .hgus-heatmap-month {
   font-size: 10.5px;
-  color: var(--subtle);
+  color: var(--subtle, var(--muted));
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -234,7 +259,7 @@ html[data-skin=luxe-noir],
   align-items: center;
   gap: 4px;
   font-size: 10.5px;
-  color: var(--subtle);
+  color: var(--subtle, var(--muted));
   flex-shrink: 0;
 }
 
@@ -243,6 +268,8 @@ html[data-skin=luxe-noir],
   height: 10px;
   display: inline-block;
 }
+
+/* ----------------------------------------------------- Range & Detail KPIs */
 
 .hgus-range-bar {
   display: flex;
@@ -265,10 +292,11 @@ html[data-skin=luxe-noir],
 
 .hgus-detail-card {
   min-width: 0;
-  padding: 11px 12px;
+  padding: 12px 13px;
   border-radius: 12px;
   border: 1px solid var(--line);
-  background: color-mix(in srgb, var(--sidebar) 45%, var(--surface));
+  background: color-mix(in srgb, var(--sidebar) 42%, var(--surface));
+  box-shadow: none;
 }
 
 .hgus-detail-label {
@@ -293,11 +321,13 @@ html[data-skin=luxe-noir],
 .hgus-detail-sub {
   margin-top: 3px;
   font-size: 10.5px;
-  color: var(--subtle);
+  color: var(--subtle, var(--muted));
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
 }
+
+/* ----------------------------------------------------- Trend & Donut Charts */
 
 .hgus-trend-body {
   margin-top: 10px;
@@ -352,13 +382,13 @@ html[data-skin=luxe-noir],
 }
 
 .hgus-hover-line {
-  stroke: var(--line-strong);
+  stroke: var(--line-strong, var(--line));
   stroke-width: 1;
   stroke-dasharray: 3 3;
 }
 
 .hgus-axis-label {
-  fill: var(--subtle);
+  fill: var(--subtle, var(--muted));
   font-size: 11px;
 }
 
@@ -371,9 +401,9 @@ html[data-skin=luxe-noir],
   max-width: 280px;
   padding: 8px 10px;
   border-radius: 10px;
-  border: 1px solid var(--line-strong);
+  border: 1px solid var(--line-strong, var(--line));
   background: var(--surface);
-  box-shadow: var(--shadow-2);
+  box-shadow: 0 4px 14px rgba(15, 23, 42, 0.08);
   pointer-events: none;
   font-size: 11.5px;
 }
@@ -442,7 +472,7 @@ html[data-skin=luxe-noir],
 
 .hgus-donut-slice {
   cursor: pointer;
-  transition: opacity .14s ease, transform .14s ease;
+  transition: opacity 0.14s ease, transform 0.14s ease;
   transform-origin: center;
 }
 
@@ -497,7 +527,7 @@ html[data-skin=luxe-noir],
   padding: 8px 6px;
   border-bottom: 1px solid var(--line);
   border-radius: 7px;
-  transition: background-color .12s;
+  transition: background-color 0.12s ease;
 }
 
 .hgus-model-row:last-child {
@@ -529,17 +559,19 @@ html[data-skin=luxe-noir],
   grid-column: 2 / 4;
   min-width: 0;
   font-size: 11px;
-  color: var(--subtle);
+  color: var(--subtle, var(--muted));
   font-variant-numeric: tabular-nums;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
 }
 
+/* ----------------------------------------------------- Empty & Actions */
+
 .hgus-empty {
   margin-top: 8px;
   padding: 28px 16px;
-  border: 1px dashed var(--line-strong);
+  border: 1px dashed var(--line-strong, var(--line));
   border-radius: 12px;
   text-align: center;
 }
@@ -576,8 +608,9 @@ html[data-skin=luxe-noir],
   gap: 6px;
   min-height: 32px;
   padding: 5px 12px;
-  border: 1px solid var(--line-strong);
+  border: 1px solid var(--line-strong, var(--line));
   border-radius: 8px;
+  box-shadow: none;
   font-size: 12px;
 }
 

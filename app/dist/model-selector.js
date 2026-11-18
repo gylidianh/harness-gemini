@@ -99,15 +99,98 @@ export function createProviderIcon(React) {
   return ProviderIcon;
 }
 
+function normalizeProfileHeaders(headers) {
+  if (Array.isArray(headers)) {
+    return headers
+      .filter(row => row && typeof row === 'object')
+      .map(row => [String(row.name ?? '').trim().toLowerCase(), String(row.value ?? '')]);
+  }
+  if (headers && typeof headers === 'object') {
+    return Object.entries(headers).map(([k, v]) => [String(k).trim().toLowerCase(), String(v ?? '')]);
+  }
+  return [];
+}
+
+export function profileCatalogKey(profile) {
+  if (!profile || typeof profile !== 'object') return '[]';
+  return JSON.stringify([
+    profile.id ?? '',
+    profile.baseUrl ?? '',
+    profile.protocol ?? 'chat',
+    Boolean(profile.hasApiKey || profile.apiKeySet || profile.apiKey || profile.apiKeyMasked),
+    profile.apiKeyMasked ?? profile.apiKey ?? '',
+    profile.apiKeyUpdatedAt ?? '',
+    normalizeProfileHeaders(profile.headers),
+    profile.proxyMode ?? 'global',
+    profile.proxyUrl ?? '',
+    profile.globalProxyUrl ?? '',
+  ]);
+}
+
+const CONNECTION_CONFIG_PATCH_KEYS = [
+  'profiles', 'baseUrl', 'protocol', 'apiKey', 'clearApiKey', 'clearKey',
+  'headers', 'proxyMode', 'proxyUrl', 'globalProxyUrl',
+];
+const SETTINGS_SAVE_HOOK = Symbol.for('hg.modelSelector.settingsSaveHook');
+
+function patchAffectsModelCatalog(patch) {
+  return Boolean(patch && typeof patch === 'object' && CONNECTION_CONFIG_PATCH_KEYS.some(key => Object.hasOwn(patch, key)));
+}
+
+function subscribeConnectionSettingsSave(api, listener) {
+  if (!api || typeof api.saveSettings !== 'function') return () => {};
+  let hook = api[SETTINGS_SAVE_HOOK];
+  if (!hook) {
+    const listeners = new Set();
+    const original = api.saveSettings;
+    const wrapped = async function wrappedSaveSettings(patch, ...rest) {
+      const result = await original.call(this, patch, ...rest);
+      if (patchAffectsModelCatalog(patch)) {
+        for (const fn of [...listeners]) {
+          try { fn(patch, result); } catch { /* ignore listener error */ }
+        }
+        if (typeof window !== 'undefined' && typeof CustomEvent === 'function') {
+          window.dispatchEvent(new CustomEvent('harness:connection-settings-saved', { detail: { patch } }));
+        }
+      }
+      return result;
+    };
+    hook = { listeners, wrapped };
+    try {
+      api.saveSettings = wrapped;
+      api[SETTINGS_SAVE_HOOK] = hook;
+    } catch {
+      return () => {};
+    }
+  }
+  hook.listeners.add(listener);
+  return () => { hook.listeners.delete(listener); };
+}
+
 // Reuse the bundled React instance and API client; do not create a second React root.
 export function createModelCatalogCache() {
   const catalogs = new Map();
-  const keyFor = profile => JSON.stringify([profile.id, profile.baseUrl, profile.protocol]);
+  const keyFor = profile => profileCatalogKey(profile);
   return {
+    keyFor,
     read(profile) { return catalogs.get(keyFor(profile))?.models; },
-    load(profile, fetchModels) {
+    clear(profileId) {
+      if (!profileId) {
+        catalogs.clear();
+        return;
+      }
+      for (const [key, entry] of catalogs) {
+        if (entry.profileId === profileId) catalogs.delete(key);
+      }
+    },
+    load(profile, fetchModels, { force = false } = {}) {
       const key = keyFor(profile);
-      const entry = catalogs.get(key) || {};
+      if (force) {
+        const current = catalogs.get(key);
+        if (current && !current.pending) catalogs.delete(key);
+      }
+      const entry = catalogs.get(key) || { profileId: profile?.id ?? '' };
+      entry.profileId = profile?.id ?? '';
       if (entry.pending) return entry.pending;
       catalogs.set(key, entry);
       entry.pending = (async () => {
@@ -116,6 +199,11 @@ export function createModelCatalogCache() {
           const models = result?.models || result?.data || [];
           entry.models = Array.isArray(models) ? models : [];
           return entry.models;
+        } catch (err) {
+          if (!Array.isArray(entry.models) && catalogs.get(key) === entry) {
+            catalogs.delete(key);
+          }
+          throw err;
         } finally { entry.pending = null; }
       })();
       // Only model IDs live in memory; never persist credentials or API responses to disk.
@@ -133,6 +221,7 @@ export function createHeaderModelSelector(React, api, createPortal) {
   const { createElement: h, useEffect, useLayoutEffect, useId, useRef, useState } = React;
   const ProviderIcon = createProviderIcon(React);
   const catalogs = createModelCatalogCache();
+  subscribeConnectionSettingsSave(api, () => { catalogs.clear(); });
   return function HeaderModelSelector({ profile, profiles = [], mode, value, runningModel, hasRunning, disabled, busy, onChange, onSettings }) {
     const [open, setOpen] = useState(false);
     const [query, setQuery] = useState('');
@@ -154,6 +243,7 @@ export function createHeaderModelSelector(React, api, createPortal) {
     const label = MODE_LABELS[mode] || '当前模式';
     const connections = profiles.length ? profiles : [profile];
     const viewed = connections.find(connection => connection.id === viewedId) || profile;
+    const viewedKey = catalogs.keyFor(viewed);
     const optionsFor = connection => modelChoices(connection, catalogs.read(connection) || []);
     const groups = (viewedId === 'all' ? connections : [viewed]).map(connection => ({
       connection, models: optionsFor(connection).filter(model => `${model} ${connection.name}`.toLowerCase().includes(query.trim().toLowerCase())),
@@ -177,7 +267,24 @@ export function createHeaderModelSelector(React, api, createPortal) {
     useEffect(() => { alive.current = true; return () => { alive.current = false; }; }, []);
     useEffect(() => { if (disabled && !busy) setOpen(false); }, [disabled, busy]);
 
-    
+    useEffect(() => {
+      const onSaved = () => {
+        catalogs.clear();
+        updateCatalog(n => n + 1);
+        setRefresh(n => n + 1);
+      };
+      const unsubscribe = subscribeConnectionSettingsSave(api, onSaved);
+      const onWindowEvent = () => onSaved();
+      if (typeof window !== 'undefined') {
+        window.addEventListener('settings-updated', onWindowEvent);
+      }
+      return () => {
+        unsubscribe();
+        if (typeof window !== 'undefined') {
+          window.removeEventListener('settings-updated', onWindowEvent);
+        }
+      };
+    }, []);
 
     useEffect(() => {
       if (!open) return;
@@ -193,7 +300,7 @@ export function createHeaderModelSelector(React, api, createPortal) {
         if (current) setError((catalogs.read(viewed)?.length ? '更新失败，仍显示上次获取的模型。' : '') + (error?.message || '读取模型列表失败，请刷新重试。'));
       }).finally(() => { if (current) setLoading(false); });
       return () => { current = false; };
-    }, [open, refresh, viewed.id, viewed.baseUrl, viewed.protocol, restricted]);
+    }, [open, refresh, viewedKey, restricted]);
 
     useLayoutEffect(() => {
       if (!open) return;
@@ -287,7 +394,7 @@ export function createHeaderModelSelector(React, api, createPortal) {
           h('div', { className: 'model-selector-main' },
             h('div', { className: 'model-selector-heading' },
               h('div', null, h('strong', null, viewedId === 'all' ? '全部连接' : viewed.name || '当前连接'), h('small', null, `${label}模型 · ${viewedId === 'all' ? '已配置模型及已读取的列表' : providerAppearance(viewed).host}`)),
-              !restricted && h('button', { type: 'button', className: 'model-selector-link', disabled: loading || blocked, onClick: () => setRefresh(n => n + 1), 'aria-label': '刷新模型列表' }, loading ? '读取中…' : '刷新')),
+              !restricted && h('button', { type: 'button', className: 'model-selector-link', disabled: loading || blocked, onClick: () => { catalogs.clear(viewedId === 'all' ? undefined : viewed.id); setRefresh(n => n + 1); }, 'aria-label': '刷新模型列表' }, loading ? '读取中…' : '刷新')),
             h('div', { className: 'model-selector-status', role: 'status', 'aria-live': 'polite' }, loading ? catalogs.read(viewed) ? `共 ${count} 个模型 · 正在更新…` : '正在读取此连接的模型列表…' : error || `共 ${count} 个模型`),
             saveError && h('p', { className: 'model-selector-error', role: 'alert' }, saveError),
             h('div', { className: 'model-selector-options', role: 'group', 'aria-label': '可用模型' },

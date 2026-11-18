@@ -1,0 +1,642 @@
+/* ==========================================================================
+   Session Tools & In-Chat Search (session-tools.css)
+   - Ctrl+F inline / cross-session search bar & match highlights
+   - Sidebar session pinning, locking, badges & one-click cleanup controls
+   - Base Q&A map primitives shared with conversation-map.css
+   ========================================================================== */
+
+::highlight(hg-find-all) {
+  background-color: #fde047;
+  color: #111827;
+}
+
+::highlight(hg-find-current) {
+  background-color: #f97316;
+  color: #ffffff;
+}
+
+/* Sticky search bar at top of main chat panel (lightweight, shadow-free) */
+.hg-find-bar {
+  position: sticky;
+  top: 0;
+  z-index: 35;
+  background: color-mix(in srgb, var(--surface-raised, var(--surface)) 94%, var(--bg, transparent));
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  border-bottom: 1px solid var(--line);
+  box-shadow: none;
+  padding: 8px 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  animation: hg-find-slide 0.14s var(--ease-out-soft, ease-out);
+}
+
+@keyframes hg-find-slide {
+  from {
+    opacity: 0;
+    transform: translateY(-5px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.hg-find-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  max-width: 900px;
+  width: 100%;
+  margin: 0 auto;
+}
+
+.hg-find-input-wrap {
+  flex: 1;
+  min-width: 160px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: var(--bg);
+  border: 1px solid var(--line-strong, var(--line));
+  border-radius: 10px;
+  padding: 5px 11px;
+  box-shadow: none;
+  transition: border-color 0.15s ease, background-color 0.15s ease;
+}
+
+.hg-find-input-wrap:focus-within {
+  border-color: var(--accent);
+  box-shadow: none;
+}
+
+.hg-find-input-wrap > svg {
+  color: var(--muted);
+  flex-shrink: 0;
+}
+
+.hg-find-input {
+  flex: 1;
+  min-width: 0;
+  border: 0;
+  outline: none;
+  background: transparent;
+  color: var(--text);
+  font-size: 13px;
+  line-height: 1.5;
+  padding: 2px 0;
+}
+
+.hg-find-input::placeholder {
+  color: var(--subtle, var(--muted));
+}
+
+.hg-find-count {
+  font-size: 12px;
+  color: var(--muted);
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+  padding: 0 4px;
+  user-select: none;
+}
+
+.hg-find-count.no-match {
+  color: var(--red);
+  font-weight: 500;
+}
+
+.hg-find-controls {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  flex-shrink: 0;
+}
+
+.hg-find-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  min-width: 28px;
+  height: 28px;
+  padding: 0 8px;
+  border-radius: 7px;
+  border: 1px solid transparent;
+  background: transparent;
+  box-shadow: none;
+  color: var(--text-secondary, var(--text));
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background-color 0.14s ease, color 0.14s ease, border-color 0.14s ease;
+}
+
+.hg-find-btn:hover:not(:disabled) {
+  background: var(--hover);
+  color: var(--text);
+}
+
+.hg-find-btn:disabled {
+  opacity: 0.38;
+  cursor: default;
+}
+
+.hg-find-btn.active {
+  background: var(--accent-tonal);
+  color: var(--accent);
+  border-color: color-mix(in srgb, var(--accent) 42%, var(--line));
+}
+
+.hg-find-scope-btn {
+  padding: 0 10px;
+  border-radius: 999px;
+  border: 1px solid var(--line-strong, var(--line));
+  font-size: 12px;
+}
+
+.hg-find-results {
+  max-width: 900px;
+  width: 100%;
+  margin: 0 auto;
+  max-height: 240px;
+  overflow-y: auto;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--bg);
+  box-shadow: none;
+  padding: 4px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.hg-find-results-head {
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--muted);
+  padding: 4px 10px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.hg-find-result-item {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  width: 100%;
+  text-align: left;
+  padding: 7px 10px;
+  border: 1px solid transparent;
+  border-radius: 8px;
+  background: transparent;
+  box-shadow: none;
+  color: var(--text);
+  cursor: pointer;
+  transition: background-color 0.12s ease, border-color 0.12s ease;
+}
+
+.hg-find-result-item:hover {
+  background: var(--hover);
+}
+
+.hg-find-result-item.current {
+  border-color: color-mix(in srgb, var(--accent) 50%, var(--line));
+  background: var(--accent-tonal);
+  outline: none;
+}
+
+.hg-find-result-top {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--text);
+}
+
+.hg-find-result-badge {
+  font-size: 10px;
+  padding: 1px 6px;
+  border-radius: 999px;
+  background: var(--accent-tonal);
+  color: var(--accent);
+  font-weight: 500;
+}
+
+.hg-find-result-role {
+  font-size: 11px;
+  color: var(--muted);
+}
+
+.hg-find-result-snippet {
+  font-size: 12px;
+  color: var(--muted);
+  line-height: 1.5;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.hg-find-result-snippet mark {
+  background: #fde047;
+  color: #111827;
+  padding: 0 2px;
+  border-radius: 3px;
+  font-weight: 500;
+}
+
+/* Message highlight outline when jumped to via search */
+.message[data-find-active="true"] {
+  outline: 1.5px solid var(--accent);
+  outline-offset: 4px;
+  border-radius: var(--radius-lg, 12px);
+  transition: outline-color 0.2s ease;
+}
+
+/* Fallback inline mark when CSS.highlights is unavailable */
+mark.hg-find-mark {
+  background-color: #fde047;
+  color: #111827;
+  border-radius: 3px;
+  padding: 0 2px;
+}
+
+mark.hg-find-mark-current {
+  background-color: #f97316;
+  color: #ffffff;
+  border-radius: 3px;
+  padding: 0 2px;
+  box-shadow: none;
+}
+
+/* ------------------------------------------- Sidebar Session List Controls */
+
+.session-list-label {
+  padding: 18px 10px 8px 12px !important;
+  gap: 6px;
+}
+
+.session-list-label-left {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+
+.session-list-count {
+  font-size: 11px;
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.session-clear-all-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 9px;
+  border-radius: 999px;
+  border: 1px solid var(--line);
+  background: transparent;
+  box-shadow: none;
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background-color 0.14s ease, color 0.14s ease, border-color 0.14s ease;
+  margin-left: auto;
+}
+
+.session-clear-all-btn:hover:not(:disabled) {
+  background: var(--red-tonal);
+  color: var(--red);
+  border-color: var(--danger-border, var(--red));
+}
+
+.session-clear-all-btn:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+
+/* Session row pin / lock / delete controls */
+.session-row.is-pinned {
+  background: color-mix(in srgb, var(--accent-tonal) 36%, transparent);
+}
+
+.session-row.is-pinned.active {
+  background: var(--accent-tonal);
+}
+
+.session-open {
+  padding-right: 6px !important;
+}
+
+.session-status-badges {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  margin-left: auto;
+  flex-shrink: 0;
+}
+
+.session-row:hover .session-status-badges,
+.session-row:focus-within .session-status-badges {
+  display: none;
+}
+
+.session-badge-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  color: var(--muted);
+}
+
+.session-badge-icon.pinned {
+  color: var(--accent);
+}
+
+.session-badge-icon.locked {
+  color: var(--amber);
+}
+
+.session-actions {
+  display: none;
+  align-items: center;
+  gap: 2px;
+  margin-right: 5px;
+  flex-shrink: 0;
+}
+
+.session-row:hover .session-actions,
+.session-row:focus-within .session-actions {
+  display: inline-flex;
+}
+
+.session-action-btn {
+  width: 26px !important;
+  height: 26px !important;
+  margin: 0 !important;
+  border-radius: 6px;
+  color: var(--muted);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: transparent;
+  box-shadow: none !important;
+  border: 0;
+  cursor: pointer;
+  transition: background-color 0.12s ease, color 0.12s ease;
+}
+
+.session-action-btn:hover:not(:disabled) {
+  background: var(--hover-strong, var(--hover));
+  color: var(--text);
+}
+
+.session-action-btn.pin-btn.is-active {
+  color: var(--accent);
+}
+
+.session-action-btn.lock-btn.is-active {
+  color: var(--amber);
+}
+
+.session-action-btn.delete-btn:hover:not(:disabled):not(.is-locked-disabled) {
+  background: var(--red-tonal);
+  color: var(--red);
+}
+
+.session-action-btn.delete-btn.is-locked-disabled {
+  opacity: 0.35;
+  cursor: not-allowed;
+}
+
+/* Enhanced delete / bulk-delete confirmation dialog */
+.confirm-dialog .hg-delete-meta {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin: -10px 0 20px;
+  padding: 11px 13px;
+  border-radius: 10px;
+  background: var(--sidebar, var(--hover));
+  border: 1px solid var(--line);
+  font-size: 12px;
+  color: var(--text-secondary, var(--text));
+  line-height: 1.6;
+}
+
+.confirm-dialog .hg-delete-meta-note {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--amber);
+  font-weight: 500;
+}
+
+.confirm-dialog .hg-delete-checkbox {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  cursor: pointer;
+  user-select: none;
+  color: var(--text);
+  font-size: 12px;
+}
+
+/* Chat header pin/lock indicator */
+.chat-heading-badges {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  margin-left: 6px;
+  vertical-align: middle;
+}
+
+.chat-heading-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  padding: 1px 7px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 500;
+  line-height: 1.5;
+}
+
+.chat-heading-badge.pinned {
+  background: var(--accent-tonal);
+  color: var(--accent);
+}
+
+.chat-heading-badge.locked {
+  background: var(--amber-tonal);
+  color: var(--amber);
+}
+
+/* ------------------------------------------- Shared Conversation Map Nodes */
+
+.hg-map {
+  max-width: 900px;
+  width: 100%;
+  margin: 0 auto;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.hg-map-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 11px;
+  color: var(--muted);
+  padding: 0 2px;
+}
+
+.hg-map-heading {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-secondary, var(--text));
+}
+
+.hg-map-count {
+  font-variant-numeric: tabular-nums;
+}
+
+.hg-map-hint {
+  margin-left: auto;
+  color: var(--subtle, var(--muted));
+}
+
+.hg-map-close {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  box-shadow: none;
+  color: var(--muted);
+  cursor: pointer;
+  transition: background-color 0.12s ease, color 0.12s ease;
+}
+
+.hg-map-close:hover {
+  background: var(--hover);
+  color: var(--text);
+}
+
+.hg-map-empty {
+  font-size: 12px;
+  color: var(--muted);
+  text-align: center;
+  padding: 14px 12px;
+  border: 1px dashed var(--line-strong, var(--line));
+  border-radius: 10px;
+  box-shadow: none;
+}
+
+.hg-map-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  max-height: min(34vh, 300px);
+  overflow-y: auto;
+  padding: 2px;
+  scrollbar-width: thin;
+}
+
+.hg-map-card {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  width: 100%;
+  text-align: left;
+  padding: 10px 12px;
+  border-radius: 10px;
+  border: 1px solid var(--line);
+  background: var(--sidebar, var(--hover));
+  box-shadow: none !important;
+  color: var(--text);
+  font: inherit;
+  cursor: pointer;
+  transition: background-color 0.14s ease, border-color 0.14s ease;
+}
+
+.hg-map-card:hover {
+  background: var(--hover);
+  border-color: var(--line-strong, var(--line));
+  box-shadow: none !important;
+}
+
+.hg-map-card.is-current {
+  border-color: color-mix(in srgb, var(--accent) 55%, var(--line));
+  background: var(--accent-tonal);
+  box-shadow: none !important;
+}
+
+.hg-map-card-top {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+}
+
+.hg-map-card-question {
+  flex: 1;
+  min-width: 0;
+  font-size: 13px;
+  font-weight: 600;
+  line-height: 1.45;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.hg-map-card-time {
+  flex-shrink: 0;
+  font-size: 11px;
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.hg-map-card-answer {
+  display: flex;
+  align-items: flex-start;
+  gap: 6px;
+  color: var(--muted);
+}
+
+.hg-map-card-answer > svg {
+  flex-shrink: 0;
+  margin-top: 2px;
+  color: var(--accent);
+}
+
+.hg-map-card-preview {
+  font-size: 12px;
+  line-height: 1.55;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.hg-map-card mark {
+  background: #fde047;
+  color: #111827;
+  border-radius: 3px;
+  padding: 0 2px;
+  font-weight: 500;
+}

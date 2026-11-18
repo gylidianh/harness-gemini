@@ -4,7 +4,7 @@ import path from 'node:path';
 import { runExternalSkill, validateExternalArgs } from './external-skills.mjs';
 import { planToolExecution, terminateTree } from './tools.mjs';
 import { PdfProgress } from './pdf-progress.mjs';
-import { checkAbort } from './util.mjs';
+import { checkAbort, safeError } from './util.mjs';
 
 export const RECORD_PDF_TOOL = {
   type: 'function',
@@ -35,6 +35,7 @@ export const RECORD_PDF_TOOL = {
 export const PDF_GUIDANCE = 'PDF 看图后调用 record_pdf_pages 提交每页文字和关键字段及 pdfProgress.targetId；continue=true 在同一调用内自动交出下一批，避免额外选页轮次。整个用户任务已完成时，可在最后一次记录的 finalAnswer 字段提交完整最终答复，无需额外总结请求；进度叙述不代表最终答复。确认记录前图片不会被当作已读完成。已完成页用记录核验，需要看原图时调用 ext_read_pdf 指定 pages 并设 review=true，宿主会强制交付原图并使用独立复核目标。断线后调用 ext_read_pdf 带原 path、resume=true 和原 pdfProgress.targetId 从未确认批次继续；多个目标匹配时必须指定 targetId。已有记录只是之前读取的内容，不能假定覆盖当前新问题；扫描页未能交付图片时只能记录 needsReview=true。';
 
 const prefetches = new Map();
+const normalizeDocumentId = id => String(id || '').trim().toLowerCase();
 const keyFor = (workspace, args) => createHash('sha256').update(JSON.stringify([
   path.resolve(workspace, String(args.path ?? '')), Number(/^\s*(\d+)/.exec(args.pages ?? '')?.[1] ?? 1),
   args.vision ?? 'auto', args.dpi ?? 200, args.maxImages ?? 4, args.search ?? '',
@@ -69,6 +70,8 @@ export class PdfPipeline {
     let restored;
     if (args?.resume === true && args?.review !== true) {
       restored = await this.progress.resume(args);
+      const restoredDocId = normalizeDocumentId(restored?.documentId);
+      if (restoredDocId && restored?.resumed) this.authorizedDocuments.add(restoredDocId);
       if (restored?.complete || restored?.completed) return { skill: 'read_pdf', exitCode: 0, result: {
         ...restored, resumed: true, note: '这些页已保存读取记录；请使用记录继续。新问题缺少信息时可指定页并设 review=true 复核。',
       } };
@@ -85,7 +88,8 @@ export class PdfPipeline {
     const output = await invoke(actual);
     if (output?.exitCode === 0 && output?.result?.documentId && actual.info !== true && !actual.search && output.result.pagesReadList?.length) {
       await this.progress.register(output, actual, { freshTarget: review });
-      this.authorizedDocuments.add(output.result.documentId);
+      const docId = normalizeDocumentId(output.result.documentId);
+      if (docId) this.authorizedDocuments.add(docId);
       const imageKeys = new Set((output.result.images ?? []).map(image => image.pdfImageKey ?? image.imageKey));
       for (const key of output.result.pdfProgress?.preparedKeys ?? []) if (!imageKeys.has(key)) {
         this.textKeys.add(key); this.pendingTextKeys.add(key);
@@ -104,10 +108,34 @@ export class PdfPipeline {
     const saved = await this.progress.record(args);
     this.toolImages.confirmPdf(saved.imageKeys ?? []);
     for (const page of saved.records ?? []) if (page.status === 'extracted') this.pendingTextKeys.delete(page.pageId);
-    if (args.continue === true && saved.nextArgs && this.authorizedDocuments.has(args.documentId) && !args.pages.some(page => page.needsReview)) {
-      const batch = await this.read(saved.nextArgs, invoke);
-      // Keep records even when the next read fails; a retry must never redo confirmed pages.
-      return { ...batch, recorded: saved.recorded, records: saved.records, progress: saved };
+    const docId = normalizeDocumentId(args?.documentId);
+    if (args.continue === true && saved.nextArgs && docId && this.authorizedDocuments.has(docId) && !args.pages.some(page => page.needsReview)) {
+      try {
+        const batch = await this.read(saved.nextArgs, invoke);
+        // Keep records even when the next read fails; a retry must never redo confirmed pages.
+        if (batch?.timedOut || (typeof batch?.exitCode === 'number' && batch.exitCode !== 0) || batch?.result?.error) {
+          const reason = safeError(batch?.result?.error || batch?.stderr || batch?.note || `读取下一批 PDF 失败（退出码 ${batch?.exitCode ?? '未知'}）`);
+          return {
+            ...saved,
+            progress: saved,
+            continued: false,
+            continueError: reason,
+            nextReadResult: batch,
+            note: `本批 ${saved.recorded} 页记录已保存，但自动读取下一批失败：${reason}。已确认的页无需重新提交，需要继续时请按 nextArgs 单独调用 ext_read_pdf。`,
+          };
+        }
+        return { ...batch, recorded: saved.recorded, records: saved.records, progress: saved };
+      } catch (error) {
+        if (this.signal?.aborted) throw error;
+        const reason = safeError(error);
+        return {
+          ...saved,
+          progress: saved,
+          continued: false,
+          continueError: reason,
+          note: `本批 ${saved.recorded} 页记录已保存，但自动读取下一批失败：${reason}。已确认的页无需重新提交，需要继续时请按 nextArgs 单独调用 ext_read_pdf。`,
+        };
+      }
     }
     return saved.complete && args.finalAnswer?.trim() ? { ...saved, finalAnswer: args.finalAnswer.trim() } : saved;
   }

@@ -1,0 +1,588 @@
+/* ==========================================================================
+   Conversation Map & Scoped Message Search (conversation-map.css)
+   Dedicated workspace tab ("对话地图") displaying Q&A timeline nodes and search.
+   Design contract:
+   - Strictly zero shadows (`box-shadow: none`) across tabs, search bar, cards,
+     current-turn indicator and timeline markers
+   - Clean 1px hairline borders, soft tonal fills and clear typographic rhythm
+   ========================================================================== */
+
+/* ------------------------------------------------------------------ Tab Bar */
+
+.right-tabs > button.hg-cmap-tab {
+  box-shadow: none !important;
+}
+
+.right-tabs > button.hg-cmap-tab > svg {
+  flex-shrink: 0;
+}
+
+/* Defensive reset so Conversation Map tab label never inherits badge styling */
+#hg-cmap-tab > span,
+.hg-cmap-tab > span {
+  padding: 0 !important;
+  border: 0 !important;
+  border-radius: 0 !important;
+  background: transparent !important;
+  box-shadow: none !important;
+  min-width: 0;
+  height: auto;
+  color: inherit;
+  font-size: inherit;
+  font-weight: inherit;
+  line-height: inherit;
+  white-space: nowrap;
+}
+
+#hg-cmap-tab > span.hg-cmap-tab-count,
+.hg-cmap-tab > span.hg-cmap-tab-count {
+  font-size: 10.5px;
+  font-weight: 600;
+  opacity: 0.72;
+  font-variant-numeric: tabular-nums;
+}
+
+.workspace-tab-panel.hg-cmap-active .right-tabs > button.active:not(.hg-cmap-tab) {
+  color: var(--muted);
+  background: transparent;
+  box-shadow: none;
+}
+
+.workspace-tab-panel.hg-cmap-active .right-tabs > button.active:not(.hg-cmap-tab)::after {
+  display: none;
+}
+
+/* Hide React's active panel content while Conversation Map is selected */
+.workspace-tab-panel.hg-cmap-active > :not(.right-tabs):not(.hg-cmap-view) {
+  display: none !important;
+}
+
+.right-tabs:has(> .hg-cmap-tab) > button {
+  white-space: nowrap;
+}
+
+.right-tabs:has(> .hg-cmap-tab) > button > span {
+  white-space: nowrap;
+}
+
+/* ----------------------------------------------------------- Panel Surface */
+
+.hg-cmap-view {
+  display: none;
+  flex: 1 1 auto;
+  min-height: 0;
+  min-width: 0;
+  flex-direction: column;
+  gap: 10px;
+  padding: 16px 14px 12px;
+  overflow: hidden;
+  container-type: inline-size;
+  color: var(--text);
+  box-shadow: none;
+}
+
+.workspace-tab-panel.hg-cmap-active > .hg-cmap-view {
+  display: flex;
+}
+
+.hg-cmap-view *,
+.hg-cmap-view *::before,
+.hg-cmap-view *::after {
+  box-sizing: border-box;
+}
+
+.hg-cmap-view [hidden] {
+  display: none !important;
+}
+
+/* ------------------------------------------------------------------ Header */
+
+.hg-cmap-view .hg-cmap-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: 0 0 auto;
+  padding: 0 2px;
+  font-size: 11px;
+  color: var(--muted);
+}
+
+.hg-cmap-view .hg-map-heading {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  font-size: 13.5px;
+  font-weight: 600;
+  color: var(--text);
+}
+
+.hg-cmap-view .hg-map-count {
+  padding: 2px 7px;
+  border-radius: 6px;
+  background: var(--hover);
+  color: var(--muted);
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.hg-cmap-view .hg-cmap-hint {
+  margin-left: auto;
+  padding: 1px 5px;
+  border: 1px solid var(--line);
+  border-radius: 5px;
+  font-size: 10.5px;
+  letter-spacing: 0;
+  color: var(--subtle, var(--muted));
+}
+
+.hg-cmap-view .hg-cmap-fold {
+  width: 28px;
+  height: 28px;
+  border-radius: 7px;
+  flex-shrink: 0;
+  margin-left: auto;
+  box-shadow: none;
+}
+
+.hg-cmap-view .hg-cmap-head:has(.hg-cmap-hint) .hg-cmap-fold {
+  margin-left: 0;
+}
+
+.hg-cmap-view .hg-map-close svg {
+  transition: transform 0.16s ease;
+}
+
+.hg-cmap-view .hg-map-close.is-folded svg {
+  transform: rotate(-90deg);
+}
+
+.hg-cmap-view .hg-cmap-description {
+  margin: -4px 2px 0;
+  flex: 0 0 auto;
+  color: var(--muted);
+  font-size: 11.5px;
+  line-height: 1.55;
+}
+
+/* ----------------------------------------------------- Search & Filter Bar */
+
+.hg-cmap-view .hg-cmap-search {
+  display: flex;
+  align-items: center;
+  flex: 0 0 auto;
+  min-width: 0;
+  min-height: 36px;
+  padding: 3px 10px;
+  gap: 7px;
+  border-radius: 9px;
+  border: 1px solid var(--line-strong, var(--line));
+  background: var(--input-bg, var(--sidebar));
+  box-shadow: none !important;
+  transition: border-color 0.15s ease, background-color 0.15s ease;
+}
+
+.hg-cmap-view .hg-cmap-search:focus-within {
+  border-color: var(--accent);
+  background: var(--surface, var(--bg));
+  box-shadow: none !important;
+}
+
+.hg-cmap-view .hg-find-input {
+  min-width: 0;
+  width: 0;
+  flex: 1;
+  font-size: 12.5px;
+}
+
+.hg-cmap-view .hg-cmap-search .hg-find-count {
+  flex-shrink: 0;
+  font-size: 11.5px;
+}
+
+.hg-cmap-view .hg-cmap-clear {
+  padding: 0;
+  width: 22px;
+  height: 22px;
+  min-width: 22px;
+  flex-shrink: 0;
+  font-size: 16px;
+  line-height: 1;
+  box-shadow: none;
+}
+
+.hg-cmap-view .hg-cmap-tools {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  flex: 0 0 auto;
+  gap: 5px;
+  padding-bottom: 2px;
+}
+
+.hg-cmap-view .hg-cmap-tools .hg-find-btn {
+  min-height: 28px;
+  padding: 3px 9px;
+  border-radius: 7px;
+  border: 1px solid var(--line);
+  background: transparent;
+  box-shadow: none !important;
+  font-size: 11.5px;
+}
+
+.hg-cmap-view .hg-cmap-tools .hg-find-btn:hover:not(:disabled) {
+  background: var(--hover);
+  border-color: var(--line-strong, var(--line));
+}
+
+.hg-cmap-view .hg-cmap-tools .hg-find-scope-btn {
+  margin-left: auto;
+}
+
+.hg-cmap-view .hg-find-btn.active {
+  color: var(--accent);
+  background: var(--accent-tonal);
+  border-color: color-mix(in srgb, var(--accent) 45%, var(--line));
+  box-shadow: none !important;
+}
+
+.hg-cmap-view button:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.hg-cmap-view button:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+/* ----------------------------------------------------- Timeline & Q&A Cards */
+
+.hg-cmap-view .hg-cmap-list {
+  flex: 1 1 auto;
+  min-height: 0;
+  max-height: none;
+  gap: 0;
+  padding: 2px 3px 4px 17px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-gutter: stable;
+  scrollbar-width: thin;
+}
+
+.hg-cmap-view .hg-map-card {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  flex: 0 0 auto;
+  width: 100%;
+  min-width: 0;
+  gap: 7px;
+  padding: 11px 12px;
+  margin: 0 0 10px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: color-mix(in srgb, var(--surface, transparent) 72%, var(--sidebar, var(--hover)));
+  box-shadow: none !important;
+  overflow: visible;
+  text-align: left;
+  transition: background-color 0.14s ease, border-color 0.14s ease;
+}
+
+.hg-cmap-view .hg-map-card:last-child {
+  margin-bottom: 2px;
+}
+
+/* Vertical timeline thread */
+.hg-cmap-view .hg-map-card::before {
+  content: "";
+  position: absolute;
+  left: -13px;
+  top: 21px;
+  bottom: -31px;
+  width: 1px;
+  background: var(--line);
+}
+
+.hg-cmap-view .hg-map-card:last-child::before {
+  display: none;
+}
+
+/* Timeline node dot (strictly shadow-free) */
+.hg-cmap-view .hg-map-card::after {
+  content: "";
+  position: absolute;
+  left: -16px;
+  top: 18px;
+  width: 7px;
+  height: 7px;
+  border: 1.5px solid var(--muted);
+  border-radius: 50%;
+  background: var(--surface, var(--sidebar));
+  box-shadow: none !important;
+  transition: background-color 0.14s ease, border-color 0.14s ease;
+}
+
+.hg-cmap-view .hg-map-card:hover {
+  border-color: var(--line-strong, var(--line));
+  background: var(--hover);
+  box-shadow: none !important;
+}
+
+.hg-cmap-view .hg-map-card.is-current {
+  border-color: color-mix(in srgb, var(--accent) 55%, var(--line));
+  background: color-mix(in srgb, var(--accent-tonal) 72%, transparent);
+  box-shadow: none !important;
+}
+
+.hg-cmap-view .hg-map-card.is-current::after {
+  border-color: var(--accent);
+  background: var(--accent);
+  box-shadow: none !important;
+}
+
+.hg-cmap-view .hg-map-card-top {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 5px;
+  width: 100%;
+  min-width: 0;
+}
+
+.hg-cmap-view .hg-cmap-node-number {
+  font-size: 10.5px;
+  font-weight: 650;
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.hg-cmap-view .hg-cmap-node-label {
+  font-size: 10.5px;
+  color: var(--muted);
+}
+
+.hg-cmap-view .hg-map-card-time {
+  margin-left: auto;
+  font-size: 10.5px;
+  color: var(--subtle, var(--muted));
+  font-variant-numeric: tabular-nums;
+}
+
+.hg-cmap-view .hg-cmap-current-label {
+  padding: 1px 5px;
+  border-radius: 4px;
+  background: color-mix(in srgb, var(--accent) 16%, transparent);
+  color: var(--accent);
+  font-size: 9.5px;
+  font-weight: 600;
+  line-height: 1.4;
+}
+
+.hg-cmap-view .hg-map-card-question {
+  flex: none;
+  width: 100%;
+  font-size: 12.5px;
+  font-weight: 600;
+  line-height: 1.55;
+  color: var(--text);
+  overflow-wrap: anywhere;
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.hg-cmap-view .hg-map-card-answer {
+  display: flex;
+  align-items: flex-start;
+  width: 100%;
+  min-width: 0;
+  padding-top: 7px;
+  border-top: 1px solid color-mix(in srgb, var(--line) 80%, transparent);
+  gap: 7px;
+}
+
+.hg-cmap-view .hg-cmap-answer-label {
+  flex-shrink: 0;
+  font-size: 10.5px;
+  line-height: 1.65;
+  color: var(--muted);
+}
+
+.hg-cmap-view .hg-cmap-answer-label.is-pending {
+  color: var(--accent);
+  font-weight: 500;
+}
+
+.hg-cmap-view .hg-map-card-preview {
+  min-width: 0;
+  font-size: 11.5px;
+  line-height: 1.6;
+  color: var(--muted);
+  overflow-wrap: anywhere;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+/* ----------------------------------------------------- Empty & Global Hits */
+
+.hg-cmap-view .hg-map-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  margin: 10px 0 0 -14px;
+  padding: 26px 16px;
+  border: 1px dashed var(--line-strong, var(--line));
+  border-radius: 10px;
+  background: transparent;
+  box-shadow: none;
+  font-size: 11.5px;
+  line-height: 1.65;
+  text-align: center;
+  color: var(--muted);
+}
+
+.hg-cmap-view .hg-map-empty strong {
+  font-size: 13px;
+  color: var(--text);
+  font-weight: 600;
+}
+
+.hg-cmap-view .hg-cmap-empty-icon {
+  display: grid;
+  place-items: center;
+  height: 40px;
+  width: 40px;
+  border-radius: 10px;
+  color: var(--accent);
+  background: var(--accent-tonal);
+}
+
+.hg-cmap-view .hg-map-empty .hg-find-btn {
+  padding: 5px 12px;
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  box-shadow: none;
+}
+
+.hg-cmap-view .hg-cmap-results {
+  flex: 0 0 auto;
+  flex-shrink: 1;
+  min-height: 0;
+  max-height: 42%;
+  overflow-y: auto;
+  border: 1px solid var(--line);
+  border-radius: 9px;
+  background: var(--sidebar, var(--bg));
+  box-shadow: none;
+  padding: 4px;
+  overscroll-behavior: contain;
+}
+
+.hg-cmap-view .hg-find-results-head {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  padding: 7px 8px;
+  background: var(--sidebar, var(--bg));
+  font-size: 11px;
+  line-height: 1.5;
+}
+
+.hg-cmap-view .hg-find-result-item {
+  border-radius: 7px;
+  padding: 8px 9px;
+  margin-top: 2px;
+  box-shadow: none;
+}
+
+.hg-cmap-view .hg-find-result-top {
+  flex-wrap: wrap;
+  gap: 5px;
+}
+
+.hg-cmap-view .hg-find-result-top > span:first-child {
+  overflow-wrap: anywhere;
+}
+
+.hg-cmap-view .hg-find-result-snippet {
+  overflow-wrap: anywhere;
+  white-space: normal;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  line-height: 1.55;
+}
+
+/* --------------------------------------------------------- Folded & Footer */
+
+.hg-cmap-view[data-folded="true"] .hg-cmap-list,
+.hg-cmap-view[data-folded="true"] .hg-cmap-results {
+  display: none;
+}
+
+.hg-cmap-view .hg-cmap-footer {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  flex-wrap: wrap;
+  flex: 0 0 auto;
+  padding: 9px 2px 0;
+  border-top: 1px solid var(--line);
+  font-size: 10.5px;
+  color: var(--muted);
+}
+
+.hg-cmap-view .hg-cmap-position {
+  color: var(--text-secondary, var(--text));
+  font-variant-numeric: tabular-nums;
+}
+
+.hg-cmap-view[data-folded="true"] .hg-cmap-footer {
+  margin-top: auto;
+}
+
+/* -------------------------------------------------------------- Responsive */
+
+@media (width <= 460px) {
+  .hg-cmap-view {
+    padding: 12px 10px 10px;
+  }
+  .hg-cmap-view .hg-cmap-hint {
+    display: none;
+  }
+}
+
+@container (max-width: 280px) {
+  .hg-cmap-view .hg-cmap-hint {
+    display: none;
+  }
+  .hg-cmap-view .hg-map-heading {
+    font-size: 12.5px;
+  }
+  .hg-cmap-view .hg-map-count {
+    padding: 2px 5px;
+  }
+  .hg-cmap-view .hg-map-card {
+    padding: 9px 10px;
+  }
+  .hg-cmap-view .hg-map-card-time {
+    font-size: 9.5px;
+  }
+  .hg-cmap-view .hg-cmap-footer {
+    font-size: 9.5px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .hg-cmap-view *,
+  .hg-cmap-view *::before,
+  .hg-cmap-view *::after {
+    transition: none !important;
+    animation: none !important;
+  }
+}

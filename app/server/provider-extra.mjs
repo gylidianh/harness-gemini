@@ -59,6 +59,16 @@ const PLACEHOLDER = new RegExp('\\$\\{(' + PLACEHOLDER_NAMES.join('|') + ')\\}',
 /** The example shown in the editor, written without a template literal so it stays literal. */
 export const EXTRA_BODY_EXAMPLE = '{"prompt_cache_key": "${sessionId}"}';
 
+/** Define an own enumerable data property without invoking Object.prototype.__proto__ setter. */
+function defineOwn(target, key, value) {
+  Object.defineProperty(target, key, {
+    value,
+    enumerable: true,
+    writable: true,
+    configurable: true,
+  });
+}
+
 /** True when a name may be sent as a header name at all. */
 export function isHeaderName(name) {
   return HEADER_NAME.test(String(name ?? ''));
@@ -86,7 +96,9 @@ export function expandPlaceholders(value, context) {
   if (Array.isArray(value)) return value.map(item => expandPlaceholders(item, context));
   if (value && typeof value === 'object') {
     const out = {};
-    for (const [key, item] of Object.entries(value)) out[key] = expandPlaceholders(item, context);
+    for (const [key, item] of Object.entries(value)) {
+      defineOwn(out, key, expandPlaceholders(item, context));
+    }
     return out;
   }
   return value;
@@ -228,7 +240,7 @@ export function normalizeProxyMode(value) {
   return PROXY_MODES.includes(value) ? value : 'global';
 }
 
-/** A proxy address as it is kept: `''` for none, else an http(s) URL. Credentials are allowed. */
+/** A proxy address as it is kept: `''` for none, else an http(s)/socks5 URL. Credentials are allowed. */
 export function normalizeProxyUrl(value, { strict = false, label = '代理地址' } = {}) {
   if (value === undefined || value === null) return '';
   if (typeof value !== 'string') {
@@ -246,7 +258,7 @@ export function normalizeProxyUrl(value, { strict = false, label = '代理地址
     if (strict) throw new HttpError(400, label + '必须是有效的 HTTP 代理地址，例如 http://127.0.0.1:7890。');
     return '';
   }
-  if (!['http:', 'https:', 'socks5:', 'socks:'].includes(url.protocol) || url.search || url.hash) {
+  if (!['http:', 'https:', 'socks5:', 'socks5h:', 'socks:'].includes(url.protocol) || url.search || url.hash) {
     if (strict) throw new HttpError(400, label + '仅支持 HTTP、HTTPS 或 SOCKS5 代理，且不能带查询参数或片段。');
     return '';
   }
@@ -281,7 +293,7 @@ export function withExtraBody(body, settings) {
     const name = (forced ? rawName.slice(1) : rawName).trim();
     if (!name || EXTRA_BODY_RESERVED.includes(name)) continue;
     if (!forced && Object.hasOwn(out, name)) continue;
-    out[name] = expandPlaceholders(value, context);
+    defineOwn(out, name, expandPlaceholders(value, context));
     changed = true;
   }
   return changed ? out : body;
@@ -300,7 +312,7 @@ export function withExtraHeaders(base, headers, settings) {
     if (!name || !isHeaderName(name) || RESERVED_HEADERS.has(name.toLowerCase())) continue;
     const lowered = name.toLowerCase();
     for (const key of Object.keys(out)) if (key.toLowerCase() === lowered) delete out[key];
-    out[name] = expandPlaceholders(String(row.value ?? ''), context);
+    defineOwn(out, name, expandPlaceholders(String(row.value ?? ''), context));
   }
   return out;
 }

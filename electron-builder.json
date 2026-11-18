@@ -1,7 +1,7 @@
 {
   "appId": "app.localharness.desktop",
   "productName": "Harness Gemini",
-  "copyright": "Harness Gemini",
+  "copyright": "Harness Gemini Contributors (MIT License)",
   "electronVersion": "44.7.2",
   "directories": {
     "app": "app",
@@ -13,18 +13,22 @@
     "server/**/*",
     "shared/**/*",
     "dist/**/*",
+    "remote/**/*",
     "third-party/**/*",
     "build/icon.*",
+    "LICENSE",
     "THIRD-PARTY-NOTICES.md",
     "package.json",
     "!**/__pycache__/**",
     "!**/*.pyc",
-    "!**/*.bak"
+    "!**/*.bak",
+    "!**/*.bak-*",
+    "!**/*.log"
   ],
   "extraResources": [
     {
-      "from": "app/build/icon.ico",
-      "to": "icon.ico"
+      "to": "icon.ico",
+      "from": "app/build/icon.ico"
     },
     {
       "from": "app/build/icon.png",
@@ -41,7 +45,7 @@
       }
     ],
     "icon": "app/build/icon.ico",
-    "signAndEditExecutable": false
+    "signExecutable": false
   },
   "nsis": {
     "guid": "12aa36ea-a894-55b8-9a98-ecd897b21d83",
@@ -54,5 +58,5 @@
     "uninstallDisplayName": "Harness Gemini ${version}",
     "artifactName": "Harness-Gemini-${version}-win-x64.${ext}"
   },
-  "afterPack": "tools/after-pack.cjs"
+  "npmRebuild": false
 }

@@ -1,0 +1,439 @@
+/* ==========================================================================
+   MCP Server Configuration & Tool Permissions (mcp-settings.css)
+   Stdio / HTTP transport editor, server status badges & per-tool toggles.
+   ========================================================================== */
+
+.mcp-settings {
+  display: grid;
+  gap: 16px;
+  color: var(--text);
+  font-size: 13px;
+  line-height: 1.65;
+}
+
+.mcp-intro {
+  margin: 0;
+  color: var(--muted);
+  font-size: 13px;
+  line-height: 1.7;
+}
+
+.mcp-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.mcp-toolbar .button {
+  min-height: 34px;
+  padding: 6px 12px;
+  border-radius: 9px;
+  border: 1px solid var(--line);
+  box-shadow: none;
+  font-size: 12px;
+}
+
+.mcp-toolbar .button.mcp-primary-btn,
+.mcp-editor-actions .button.mcp-primary-btn {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: var(--on-accent, #ffffff);
+  font-weight: 600;
+  box-shadow: none;
+}
+
+.mcp-toolbar .button.mcp-primary-btn:hover:not(:disabled),
+.mcp-editor-actions .button.mcp-primary-btn:hover:not(:disabled) {
+  filter: brightness(1.05);
+}
+
+.mcp-summary-stat {
+  margin-left: auto;
+  color: var(--muted);
+  font-size: 11.5px;
+  white-space: nowrap;
+}
+
+.mcp-notice {
+  margin: 0;
+  padding: 9px 12px;
+  border-radius: 10px;
+  border: 1px solid color-mix(in srgb, var(--accent) 32%, var(--line));
+  background: var(--accent-tonal);
+  color: var(--text);
+  font-size: 12px;
+}
+
+/* ------------------------------------------------------------- Editor Form */
+
+.mcp-panel-box {
+  display: grid;
+  gap: 14px;
+  padding: 18px;
+  border: 1px solid var(--line);
+  border-radius: 13px;
+  background: color-mix(in srgb, var(--sidebar) 38%, var(--surface));
+  box-shadow: none;
+}
+
+.mcp-panel-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.mcp-panel-head strong {
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.mcp-transport-tabs {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.mcp-transport-tab {
+  display: grid;
+  gap: 3px;
+  padding: 10px 12px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--surface);
+  box-shadow: none;
+  color: var(--text);
+  text-align: left;
+  font: inherit;
+  cursor: pointer;
+  transition: border-color 0.14s ease, background-color 0.14s ease;
+}
+
+.mcp-transport-tab strong {
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.mcp-transport-tab small {
+  color: var(--muted);
+  font-size: 11px;
+}
+
+.mcp-transport-tab:hover {
+  border-color: var(--line-strong, var(--line));
+}
+
+.mcp-transport-tab.active {
+  border-color: var(--accent);
+  background: var(--accent-tonal);
+}
+
+.mcp-grid-2 {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.mcp-field {
+  display: grid;
+  gap: 6px;
+  min-width: 0;
+}
+
+.mcp-field > span {
+  font-size: 12px;
+  font-weight: 550;
+  color: var(--text);
+}
+
+.mcp-field > small {
+  color: var(--muted);
+  font-size: 11px;
+  line-height: 1.55;
+}
+
+.mcp-field input[type="text"],
+.mcp-field input[type="password"],
+.mcp-field input[type="number"],
+.mcp-field select,
+.mcp-field textarea {
+  width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
+  padding: 8px 11px;
+  border: 1px solid var(--line-strong, var(--line));
+  border-radius: 9px;
+  background: var(--surface);
+  box-shadow: none;
+  color: var(--text);
+  font: inherit;
+  font-size: 12.5px;
+  transition: border-color 0.14s ease;
+}
+
+.mcp-field textarea {
+  min-height: 76px;
+  resize: vertical;
+  font-family: ui-monospace, SFMono-Regular, Consolas, monospace;
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.mcp-field input:focus,
+.mcp-field select:focus,
+.mcp-field textarea:focus {
+  outline: none;
+  border-color: var(--accent);
+  box-shadow: none;
+}
+
+.mcp-checks {
+  display: grid;
+  gap: 8px;
+  padding: 10px 12px;
+  border-radius: 10px;
+  border: 1px solid var(--line);
+  background: var(--surface);
+}
+
+.mcp-check {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  font-size: 12px;
+  color: var(--text);
+  cursor: pointer;
+}
+
+.mcp-check input[type="checkbox"] {
+  margin-top: 3px;
+  min-height: 0;
+  width: 15px;
+  height: 15px;
+  flex: none;
+}
+
+.mcp-check small {
+  display: block;
+  color: var(--muted);
+  font-size: 11px;
+}
+
+.mcp-editor-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.mcp-editor-actions .button {
+  min-height: 34px;
+  padding: 6px 13px;
+  border-radius: 9px;
+  border: 1px solid var(--line);
+  box-shadow: none;
+  font-size: 12px;
+}
+
+/* ------------------------------------------------------------ Server Cards */
+
+.mcp-list {
+  display: grid;
+  gap: 10px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.mcp-card {
+  display: grid;
+  gap: 9px;
+  min-width: 0;
+  padding: 15px 16px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--surface);
+  box-shadow: none;
+}
+
+.mcp-card.off {
+  background: var(--sidebar);
+}
+
+.mcp-card-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  min-width: 0;
+}
+
+.mcp-card-title {
+  font-size: 13.5px;
+  font-weight: 600;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.mcp-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 7px;
+  border-radius: 999px;
+  font-size: 10.5px;
+  font-weight: 600;
+  border: 1px solid var(--line);
+  background: color-mix(in srgb, var(--text) 4%, transparent);
+  color: var(--muted);
+  white-space: nowrap;
+}
+
+.mcp-badge.ready {
+  color: var(--green, #15803d);
+  border-color: color-mix(in srgb, var(--green, #15803d) 34%, var(--line));
+  background: var(--green-tonal, color-mix(in srgb, #15803d 10%, transparent));
+}
+
+.mcp-badge.error {
+  color: var(--red, #dc2626);
+  border-color: color-mix(in srgb, var(--red, #dc2626) 35%, var(--line));
+  background: var(--red-tonal, color-mix(in srgb, #dc2626 10%, transparent));
+}
+
+.mcp-badge.accent {
+  color: var(--accent);
+  border-color: color-mix(in srgb, var(--accent) 32%, var(--line));
+  background: var(--accent-tonal);
+}
+
+.mcp-card-target {
+  margin: 0;
+  color: var(--muted);
+  font-family: ui-monospace, SFMono-Regular, Consolas, monospace;
+  font-size: 11.5px;
+  overflow-wrap: anywhere;
+}
+
+.mcp-card-desc {
+  margin: 0;
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.mcp-card-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.mcp-card-actions .button {
+  min-height: 30px;
+  padding: 4px 10px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  box-shadow: none;
+  font-size: 11.5px;
+}
+
+.mcp-card-actions .button.danger {
+  color: var(--red, #dc2626);
+  border-color: color-mix(in srgb, var(--red, #dc2626) 35%, var(--line));
+}
+
+.mcp-tools-details {
+  font-size: 11.5px;
+  color: var(--muted);
+}
+
+.mcp-tools-details summary {
+  cursor: pointer;
+  color: var(--accent);
+  width: fit-content;
+  font-weight: 550;
+}
+
+.mcp-tools-grid {
+  display: grid;
+  gap: 6px;
+  margin: 10px 0 0;
+  padding: 10px 0 0;
+  border-top: 1px solid var(--line);
+  list-style: none;
+}
+
+.mcp-tool-item {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 7px 10px;
+  border-radius: 8px;
+  border: 1px solid var(--line);
+  background: color-mix(in srgb, var(--sidebar) 45%, var(--surface));
+}
+
+.mcp-tool-copy {
+  min-width: 0;
+  display: grid;
+  gap: 2px;
+}
+
+.mcp-tool-copy code {
+  color: var(--text);
+  font-size: 11.5px;
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+
+.mcp-tool-copy span {
+  color: var(--muted);
+  font-size: 11px;
+  overflow-wrap: anywhere;
+}
+
+.mcp-tool-controls {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: none;
+  font-size: 11px;
+}
+
+.mcp-tool-controls label {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.mcp-empty {
+  padding: 20px 16px;
+  border: 1px dashed var(--line-strong, var(--line));
+  border-radius: 12px;
+  color: var(--muted);
+  font-size: 12.5px;
+  line-height: 1.75;
+}
+
+.mcp-empty strong {
+  display: block;
+  margin-bottom: 4px;
+  color: var(--text);
+  font-size: 13.5px;
+}
+
+@media (max-width: 760px) {
+  .mcp-transport-tabs,
+  .mcp-grid-2 {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .mcp-summary-stat {
+    margin-left: 0;
+  }
+}

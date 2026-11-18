@@ -1,0 +1,455 @@
+/* ==========================================================================
+   Remote Access & Mobile Pairing Settings (remote-settings.css)
+   Direct LAN / Relay modes, QR pairing card, tunnel logs & paired devices.
+   ========================================================================== */
+
+.remote-settings {
+  display: grid;
+  gap: 14px;
+  padding: 4px 2px 24px;
+  max-width: 720px;
+}
+
+.remote-intro {
+  margin: 0;
+  color: var(--text);
+  font-size: 13px;
+  line-height: 1.65;
+}
+
+.remote-hint {
+  margin: 0;
+  color: var(--muted);
+  font-size: 11.5px;
+  line-height: 1.68;
+}
+
+.remote-loading {
+  margin: 0;
+  color: var(--muted);
+  font-size: 12px;
+}
+
+/* ------------------------------------------------------------ Mode Switch */
+
+.remote-modes {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+
+.remote-mode {
+  display: grid;
+  gap: 3px;
+  text-align: left;
+  padding: 11px 13px;
+  cursor: pointer;
+  border: 1px solid var(--line);
+  border-radius: 11px;
+  background: var(--surface);
+  box-shadow: none;
+  color: var(--text);
+  font: inherit;
+  transition: border-color 0.14s ease, background-color 0.14s ease;
+}
+
+.remote-mode strong {
+  font-size: 12.5px;
+  font-weight: 600;
+}
+
+.remote-mode small {
+  color: var(--muted);
+  font-size: 11px;
+  line-height: 1.5;
+}
+
+.remote-mode:hover {
+  border-color: var(--line-strong, var(--line));
+}
+
+.remote-mode.on {
+  border-color: var(--accent);
+  background: var(--accent-tonal);
+}
+
+.remote-mode.on small {
+  color: var(--accent);
+}
+
+.remote-mode:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+/* ------------------------------------------------------------- Status Row */
+
+.remote-status {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  font-size: 12px;
+}
+
+.remote-status strong {
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.remote-meta {
+  color: var(--muted);
+  font-size: 11px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.remote-dot {
+  flex: none;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--muted);
+  box-shadow: none;
+}
+
+.remote-dot.connected {
+  background: var(--green, #2fa36b);
+}
+
+.remote-dot.reconnecting,
+.remote-dot.connecting {
+  background: var(--amber, #d19a2a);
+}
+
+.remote-dot.error {
+  background: var(--red, #cf4b3a);
+}
+
+/* ----------------------------------------------------- Enable Form & Cards */
+
+.remote-form {
+  display: grid;
+  gap: 12px;
+  padding: 15px 16px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--surface);
+  box-shadow: none;
+}
+
+.remote-form .field {
+  display: grid;
+  gap: 6px;
+  margin: 0;
+}
+
+.remote-form .field > span {
+  color: var(--text);
+  font-size: 12px;
+  font-weight: 550;
+}
+
+.remote-form .field small {
+  color: var(--muted);
+  font-size: 11px;
+  line-height: 1.6;
+}
+
+.remote-form .field input {
+  width: 100%;
+  box-sizing: border-box;
+  padding: 8px 11px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--sidebar);
+  box-shadow: none;
+  color: var(--text);
+  font-size: 12px;
+  transition: border-color 0.14s ease;
+}
+
+.remote-form .field input:focus {
+  outline: none;
+  border-color: var(--accent);
+}
+
+.remote-mode-switch {
+  border-color: var(--accent);
+}
+
+.remote-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+}
+
+/* ----------------------------------------------------- Pairing QR Section */
+
+.remote-pair {
+  display: flex;
+  gap: 18px;
+  flex-wrap: wrap;
+  padding: 15px 16px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--surface);
+  box-shadow: none;
+}
+
+.remote-qr-wrap {
+  flex: none;
+  padding: 10px;
+  border-radius: 10px;
+  background: #ffffff;
+  border: 1px solid var(--line);
+}
+
+.remote-qr {
+  display: block;
+}
+
+.remote-pair-copy {
+  display: grid;
+  gap: 10px;
+  flex: 1 1 260px;
+  min-width: 0;
+}
+
+.remote-steps {
+  margin: 0;
+  padding-left: 18px;
+  color: var(--text);
+  font-size: 12px;
+  line-height: 1.8;
+}
+
+.remote-link-row {
+  display: flex;
+  gap: 8px;
+}
+
+.remote-link-row input {
+  flex: 1 1 auto;
+  min-width: 0;
+  padding: 7px 10px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--sidebar);
+  color: var(--muted);
+  font-family: ui-monospace, SFMono-Regular, Consolas, monospace;
+  font-size: 11px;
+}
+
+/* ------------------------------------------------ LAN URLs & Device Cards */
+
+.remote-card {
+  display: grid;
+  gap: 10px;
+  padding: 15px 16px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--surface);
+  box-shadow: none;
+}
+
+.remote-card-heading {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.remote-card-heading strong {
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.remote-danger {
+  border-color: color-mix(in srgb, var(--red, #cf4b3a) 32%, var(--line));
+}
+
+.remote-urls {
+  display: grid;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.remote-url-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 7px 10px;
+  border: 1px solid var(--line);
+  border-radius: 9px;
+  background: var(--sidebar);
+}
+
+.remote-url-row code {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-family: ui-monospace, SFMono-Regular, Consolas, monospace;
+  font-size: 11.5px;
+  color: var(--text);
+}
+
+.remote-url-row .button {
+  flex: none;
+}
+
+.remote-tunnel {
+  display: grid;
+  gap: 8px;
+  margin-top: 4px;
+  padding-top: 12px;
+  border-top: 1px dashed var(--line);
+}
+
+.remote-details {
+  font-size: 11px;
+  color: var(--muted);
+}
+
+.remote-details summary {
+  cursor: pointer;
+}
+
+.remote-log {
+  margin: 6px 0 0;
+  padding: 8px 10px;
+  max-height: 140px;
+  overflow: auto;
+  border-radius: 8px;
+  background: var(--sidebar);
+  color: var(--muted);
+  font-size: 10.5px;
+  line-height: 1.5;
+  white-space: pre-wrap;
+  word-break: break-all;
+}
+
+.remote-devices {
+  display: grid;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.remote-device {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 10px;
+  border: 1px solid var(--line);
+  border-radius: 9px;
+  background: var(--sidebar);
+}
+
+.remote-device-name {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 12px;
+}
+
+.remote-badge {
+  flex: none;
+  padding: 2px 7px;
+  border-radius: 999px;
+  background: var(--hover);
+  color: var(--muted);
+  font-size: 10px;
+}
+
+.remote-badge.live {
+  background: var(--accent-tonal);
+  color: var(--accent);
+}
+
+.remote-empty {
+  margin: 0;
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.7;
+}
+
+/* --------------------------------------------------------- Toggle & Error */
+
+.remote-switch {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 12px;
+  font-weight: 550;
+  cursor: pointer;
+}
+
+.remote-switch input {
+  width: 34px;
+  height: 18px;
+  appearance: none;
+  border-radius: 999px;
+  background: var(--line-strong, var(--line));
+  position: relative;
+  cursor: pointer;
+  transition: background-color 0.16s ease;
+  margin: 0;
+}
+
+.remote-switch input::after {
+  content: "";
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: #ffffff;
+  transition: transform 0.16s ease;
+}
+
+.remote-switch input:checked {
+  background: var(--accent);
+}
+
+.remote-switch input:checked::after {
+  transform: translateX(16px);
+}
+
+.remote-switch input:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.remote-error {
+  margin: 0;
+  padding: 8px 10px;
+  border-radius: 8px;
+  background: var(--red-tonal, color-mix(in srgb, #cf4b3a 12%, transparent));
+  color: var(--red, #cf4b3a);
+  font-size: 11.5px;
+  line-height: 1.6;
+}
+
+@media (max-width: 640px) {
+  .remote-pair {
+    flex-direction: column;
+  }
+  .remote-qr {
+    width: 168px;
+    height: 168px;
+  }
+  .remote-modes {
+    grid-template-columns: 1fr;
+  }
+}

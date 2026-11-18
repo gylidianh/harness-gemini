@@ -43,8 +43,8 @@ function localPath(value) {
  * bypasses the request hook either (prefetch, WebRTC over TCP, a beacon sent while unloading).
  */
 export function createOfflineProxy() {
-  let server;
-  let starting;
+  let server = null;
+  let starting = null;
   const sockets = new Set();
   const refuse = socket => {
     try { socket.end('HTTP/1.1 403 Forbidden\r\nConnection: close\r\nContent-Length: 0\r\n\r\n'); } catch {}
@@ -52,26 +52,72 @@ export function createOfflineProxy() {
   };
   let stopped = false;
   function start() {
+    if (stopped) return Promise.reject(new Error('浏览器已关闭。'));
     if (starting) return starting;
-    starting = new Promise((resolve, reject) => {
-      server = http.createServer((_req, res) => { res.writeHead(403, { Connection: 'close', 'Content-Length': '0' }); res.end(); });
-      server.on('connect', (_req, socket) => refuse(socket));
-      server.on('upgrade', (_req, socket) => refuse(socket));
-      server.on('connection', socket => { sockets.add(socket); socket.once('close', () => sockets.delete(socket)); });
-      server.once('error', reject);
-      server.listen(0, '127.0.0.1', () => {
-        if (stopped) { server.close(); reject(new Error('浏览器已关闭。')); return; }
-        resolve({ host: '127.0.0.1', port: server.address().port });
-      });
+    const candidate = http.createServer((_req, res) => {
+      res.writeHead(403, { Connection: 'close', 'Content-Length': '0' });
+      res.end();
     });
-    return starting;
+    // Keep a permanent error listener so secondary errors on the failed/closing server
+    // never crash Node with an unhandled 'error' event.
+    candidate.on('error', () => {});
+    candidate.on('connect', (_req, socket) => refuse(socket));
+    candidate.on('upgrade', (_req, socket) => refuse(socket));
+    candidate.on('connection', socket => {
+      sockets.add(socket);
+      socket.on('error', () => {});
+      socket.once('close', () => sockets.delete(socket));
+    });
+    server = candidate;
+    const attempt = new Promise((resolve, reject) => {
+      let settled = false;
+      const fail = error => {
+        if (settled) return;
+        settled = true;
+        if (starting === attempt) starting = null;
+        if (server === candidate) server = null;
+        try { candidate.close(); } catch {}
+        reject(error);
+      };
+      candidate.once('error', fail);
+      try {
+        candidate.listen(0, '127.0.0.1', () => {
+          candidate.removeListener('error', fail);
+          if (stopped) {
+            fail(new Error('浏览器已关闭。'));
+            return;
+          }
+          const address = candidate.address();
+          if (!address || typeof address === 'string') {
+            fail(new Error('离线代理未能分配端口。'));
+            return;
+          }
+          settled = true;
+          resolve({ host: '127.0.0.1', port: address.port });
+        });
+      } catch (error) {
+        fail(error);
+      }
+    });
+    starting = attempt;
+    return attempt;
   }
   async function close() {
     stopped = true;
     for (const socket of sockets) { try { socket.destroy(); } catch {} }
     sockets.clear();
-    if (server?.listening) await new Promise(resolve => server.close(() => resolve()));
-    if (starting) await starting.catch(() => {});
+    const activeServer = server;
+    const activeStart = starting;
+    server = null;
+    starting = null;
+    if (activeServer?.listening) {
+      await new Promise(resolve => {
+        try { activeServer.close(() => resolve()); } catch { resolve(); }
+      });
+    } else if (activeServer) {
+      try { activeServer.close(); } catch {}
+    }
+    if (activeStart) await activeStart.catch(() => {});
   }
   return { start, close };
 }
@@ -109,9 +155,9 @@ export function createBrowserNetworkPolicy({ appOrigin, lookup = dnsLookup, time
   let closed = false;
   // fix5: true while a system proxy (Clash, a company gateway) carries this traffic. See resolve().
   let proxied = initialProxied === true;
-  let proxy;
+  let proxy = null;
   let proxyPort = 0;
-  let proxyStart;
+  let proxyStart = null;
 
   function target(value) {
     if (closed || !browserUrlAllowed(value, appOrigin, { resource: true })) throw policyError('此地址不能在内置浏览器中打开。');
@@ -234,27 +280,58 @@ export function createBrowserNetworkPolicy({ appOrigin, lookup = dnsLookup, time
         targetSocket.setTimeout(0); // 1.3.3-fix2: the 5 s limit is for connecting only, not for an idle WebSocket.
         const pathName = `${new URL(req.url).pathname}${new URL(req.url).search}`;
         const lines = [`${req.method} ${pathName} HTTP/${req.httpVersion}`, ...Object.entries(headers).map(([key, value]) => `${key}: ${Array.isArray(value) ? value.join(', ') : value}`), '', ''];
-        targetSocket.write(lines.join('\r\n'));
-        if (head?.length) targetSocket.write(head);
+        targetSocket.write(Buffer.concat([Buffer.from(lines.join('\r\n'), 'latin1'), head]));
         socket.pipe(targetSocket); targetSocket.pipe(socket);
       });
     } catch { rejectSocket(socket); }
   }
 
   async function start() {
+    if (closed) throw policyError('浏览器已关闭。');
     if (proxyStart) return proxyStart;
-    proxyStart = new Promise((resolve, reject) => {
-      proxy = http.createServer((req, res) => { void handleHttp(req, res); });
-      proxy.on('connect', (req, socket) => { void handleConnect(req, socket); });
-      proxy.on('upgrade', (req, socket, head) => { void handleUpgrade(req, socket, head); });
-      proxy.on('connection', socket => { sockets.add(socket); socket.once('close', () => sockets.delete(socket)); });
-      proxy.once('error', reject);
-      proxy.listen(0, '127.0.0.1', () => {
-        if (closed) { proxy.close(); reject(policyError('浏览器已关闭。')); return; }
-        proxyPort = proxy.address().port; resolve({ port: proxyPort, host: '127.0.0.1' });
-      });
+    const candidate = http.createServer((req, res) => { void handleHttp(req, res); });
+    candidate.on('error', () => {});
+    candidate.on('connect', (req, socket) => { void handleConnect(req, socket); });
+    candidate.on('upgrade', (req, socket, head) => { void handleUpgrade(req, socket, head); });
+    candidate.on('connection', socket => {
+      sockets.add(socket);
+      socket.on('error', () => {});
+      socket.once('close', () => sockets.delete(socket));
     });
-    return proxyStart;
+    proxy = candidate;
+    const attempt = new Promise((resolve, reject) => {
+      let settled = false;
+      const fail = error => {
+        if (settled) return;
+        settled = true;
+        if (proxyStart === attempt) proxyStart = null;
+        if (proxy === candidate) proxy = null;
+        try { candidate.close(); } catch {}
+        reject(error);
+      };
+      candidate.once('error', fail);
+      try {
+        candidate.listen(0, '127.0.0.1', () => {
+          candidate.removeListener('error', fail);
+          if (closed) {
+            fail(policyError('浏览器已关闭。'));
+            return;
+          }
+          const address = candidate.address();
+          if (!address || typeof address === 'string') {
+            fail(policyError('浏览器代理未能分配端口。'));
+            return;
+          }
+          settled = true;
+          proxyPort = address.port;
+          resolve({ port: proxyPort, host: '127.0.0.1' });
+        });
+      } catch (error) {
+        fail(error);
+      }
+    });
+    proxyStart = attempt;
+    return attempt;
   }
 
   async function close() {
@@ -262,9 +339,19 @@ export function createBrowserNetworkPolicy({ appOrigin, lookup = dnsLookup, time
     closed = true; answers.clear(); allowedPrivateOrigins.clear();
     for (const socket of sockets) { try { socket.destroy(); } catch {} }
     sockets.clear();
-    if (proxy?.listening) await new Promise(resolve => proxy.close(() => resolve()));
+    const activeProxy = proxy;
+    const activeStart = proxyStart;
+    proxy = null;
+    proxyStart = null;
+    if (activeProxy?.listening) {
+      await new Promise(resolve => {
+        try { activeProxy.close(() => resolve()); } catch { resolve(); }
+      });
+    } else if (activeProxy) {
+      try { activeProxy.close(); } catch {}
+    }
     // A start() still in progress settles (rejected) instead of hanging.
-    if (proxyStart) await proxyStart.catch(() => {});
+    if (activeStart) await activeStart.catch(() => {});
   }
 
   return {

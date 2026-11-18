@@ -9,6 +9,10 @@ import { createEmbeddedBrowser } from './browser.mjs';
 import { installContextMenu } from './context-menu.mjs';
 import { createDesktopPet } from './pet.mjs';
 import { createTitleBarKeys } from './titlebar-keys.mjs';
+import { createRemoteSettings } from './remote-settings.mjs';
+
+/** One channel for every remote-connection action; the action name travels in the payload. */
+const REMOTE_CHANNEL = 'harness:remote';
 
 // The visible app name follows the product; explicit legacy paths below preserve user data.
 app.setName('Harness Gemini');
@@ -28,6 +32,7 @@ let pendingNotificationLaunch = isProtocolLaunch(argv, NOTIFICATION_PROTOCOL)
   ? { sessionId: sessionFromProtocolArgs(argv, NOTIFICATION_PROTOCOL) ?? undefined } : undefined;
 let embeddedBrowser;
 let desktopPet;
+let remoteSettings;
 let origin;
 let dataDir;
 let workspace;
@@ -343,6 +348,9 @@ function installMenu() {
 const SHUTDOWN_TIMEOUT_MS = 20_000;
 
 async function stopService() {
+  // Close the outbound relay and the LAN listener first: a phone should see "offline" at once,
+  // not a half-closed app, and the tunnel's child process must not outlive this window.
+  await remoteSettings?.stop();
   if (!server) return;
   let deadline;
   const ceiling = new Promise((_resolve, reject) => {
@@ -518,6 +526,31 @@ async function launch() {
       return refuse(error?.status === 404 ? '这个连接还没有保存，无法显示密钥。' : error?.status === 400 ? '连接 ID 不正确。' : '暂时无法显示密钥。');
     }
   });
+  ipcMain.handle(REMOTE_CHANNEL, async (event, action, payload) => {
+    const refuse = error => ({ ok: false, error });
+    try {
+      // A remote-control channel is answered only for this window's own settings page.
+      if (!mainWindow || mainWindow.isDestroyed() || event?.sender !== mainWindow.webContents) return refuse('只能在设置页修改远程连接。');
+      if (event.senderFrame && (event.senderFrame !== mainWindow.webContents.mainFrame || !ownUrl(event.senderFrame.url))) return refuse('只能在设置页修改远程连接。');
+      if (!remoteSettings) return refuse('远程连接尚未初始化。');
+      switch (action) {
+        case 'status': return { ok: true, data: remoteSettings.status() };
+        case 'pairLink': return { ok: true, data: remoteSettings.pairLink() };
+        case 'enable': return { ok: true, data: await remoteSettings.enable(payload) };
+        case 'disable': return { ok: true, data: await remoteSettings.disable() };
+        case 'revoke': return { ok: true, data: await remoteSettings.revoke(payload?.deviceId) };
+        case 'setDispatch': return { ok: true, data: await remoteSettings.setDispatch(payload?.enabled === true) };
+        case 'setPlainLan': return { ok: true, data: await remoteSettings.setPlainLan(payload?.enabled === true) };
+        case 'setTunnel': return { ok: true, data: await remoteSettings.setTunnel(payload?.enabled === true) };
+        case 'installTunnel': return { ok: true, data: await remoteSettings.installTunnel() };
+        case 'rotateSecret': return { ok: true, data: await remoteSettings.rotateSecret() };
+        default: return refuse('未知的远程操作。');
+      }
+    } catch (error) {
+      return refuse(typeof error?.message === 'string' ? error.message : '远程设置暂时不可用。');
+    }
+  });
+
   server = await startServer({ port: 0, dataDir, defaultWorkspace: workspace, distDir: path.join(app.getAppPath(), 'dist'), onRunFinished: completion => {
     taskbarAttention.notify(completion);
     completionNotifications.notify(completion);
@@ -529,6 +562,18 @@ async function launch() {
   origin = `http://127.0.0.1:${server.address().port}`;
   workspace = currentWorkspace();
   if (flags.smokeTest && server.app.locals.harness.store.settings.baseUrl) throw new Error('SMOKE_REQUIRES_UNCONFIGURED_DATA');
+  // The relay dials out; this app still listens on 127.0.0.1 only. The settings page owns it
+  // from here, so enabling, revoking and switching dispatch need no restart.
+  if (!flags.smokeTest) {
+    remoteSettings = createRemoteSettings({
+      dataDir,
+      getOrigin: () => origin,
+      getHarness: () => server?.app?.locals?.harness,
+      log: (message, error) => { if (!app.isPackaged) console.warn(`[relay] ${message}`, error?.message ?? ''); },
+    });
+    const remoteStatus = await remoteSettings.start();
+    if (!app.isPackaged && remoteStatus.enabled) console.log('[relay] 已启用远程连接。');
+  }
   const preloadPath = path.join(app.getAppPath(), 'desktop', 'preload.cjs');
   const preferences = {
     nodeIntegration: false, nodeIntegrationInWorker: false, nodeIntegrationInSubFrames: false,
@@ -626,7 +671,7 @@ async function launch() {
     rendererOrigin: origin,
     permissions: 'own-origin clipboard-sanitized-write only',
   };
-  const desktopBridge = await mainWindow.webContents.executeJavaScript('(async () => ({ keys: Object.keys(window.harnessDesktop ?? {}).sort(), completionNotifications: window.harnessDesktop?.completionNotifications, copyImage: typeof window.harnessDesktop?.copyImage, revealApiKey: typeof window.harnessDesktop?.revealApiKey, onOpenSession: typeof window.harnessDesktop?.onOpenSession, testCompletionNotification: typeof window.harnessDesktop?.testCompletionNotification, browserKeys: Object.keys(window.harnessDesktop?.browser ?? {}).sort(), browserState: await window.harnessDesktop?.browser?.getState(), attachmentTray: document.querySelector(".composer-attachments") !== null, attachmentInput: document.querySelector(".attachment-input[type=file]")?.multiple === true, titleBar: await new Promise(r => setTimeout(r, 300)).then(() => { const bar = document.getElementById("hg-titlebar"); const root = document.getElementById("root"); return bar ? { menus: [...bar.querySelectorAll(".hg-tb-menu")].map(b => b.textContent), title: bar.querySelector(".hg-tb-title")?.textContent ?? "", barBottom: Math.round(bar.getBoundingClientRect().bottom), rootTop: Math.round(root?.getBoundingClientRect().top ?? -1) } : null; }) }))()');
+  const desktopBridge = await mainWindow.webContents.executeJavaScript('(async () => ({ keys: Object.keys(window.harnessDesktop ?? {}).sort(), completionNotifications: window.harnessDesktop?.completionNotifications, copyImage: typeof window.harnessDesktop?.copyImage, revealApiKey: typeof window.harnessDesktop?.revealApiKey, onOpenSession: typeof window.harnessDesktop?.onOpenSession, testCompletionNotification: typeof window.harnessDesktop?.testCompletionNotification, browserKeys: Object.keys(window.harnessDesktop?.browser ?? {}).sort(), remoteKeys: Object.keys(window.harnessDesktop?.remote ?? {}).sort(), browserState: await window.harnessDesktop?.browser?.getState(), attachmentTray: document.querySelector(".composer-attachments") !== null, attachmentInput: document.querySelector(".attachment-input[type=file]")?.multiple === true, titleBar: await new Promise(r => setTimeout(r, 300)).then(() => { const bar = document.getElementById("hg-titlebar"); const root = document.getElementById("root"); return bar ? { menus: [...bar.querySelectorAll(".hg-tb-menu")].map(b => b.textContent), title: bar.querySelector(".hg-tb-title")?.textContent ?? "", barBottom: Math.round(bar.getBoundingClientRect().bottom), rootTop: Math.round(root?.getBoundingClientRect().top ?? -1) } : null; }) }))()');
   // The conversation header and native menus now occupy the same top row. Keep fixed
   // descendants contained, and check that live controls clear the menus/caption buttons.
   const titleBarLayout = await mainWindow.webContents.executeJavaScript(`(() => {
@@ -751,7 +796,7 @@ async function launch() {
     iconIncluded: Boolean(appIcon),
     iconSize: appIcon ? appIcon.getSize() : null,
   };
-  report.ok = Boolean(checks.ok && lifecycle.didFinishLoad && !lifecycle.mainFrameLoadError && !lifecycle.renderProcessGone && !lifecycle.uncaughtScriptError && security.nodeIntegration === false && security.contextIsolation === true && security.sandbox === true && security.webSecurity === true && security.preloadConfigured && security.preloadIsExpected && security.sessionPreloadCount === 0 && security.backgroundThrottling === false && desktopBridge.keys.join(',') === 'browser,completionNotifications,copyImage,onOpenSession,revealApiKey,testCompletionNotification' && desktopBridge.copyImage === 'function' && desktopBridge.revealApiKey === 'function' && desktopBridge.completionNotifications === true && desktopBridge.onOpenSession === 'function' && desktopBridge.testCompletionNotification === 'function' && desktopBridge.browserKeys.join(',') === 'act,activateTab,back,cancelDownload,clearDownloads,clearSiteData,closeTab,forward,getState,home,navigate,newTab,onDownloads,onState,openDevTools,openExternal,readPage,reload,reopenTab,revealDownload,screenshot,setPresentation,setViewport,snapshot,stop,visibility' && desktopBridge.browserState?.url === '' && desktopBridge.browserState?.loading === false && desktopBridge.browserState?.desktopZoomFactor > 0 && desktopBridge.browserState?.presentation?.mode === 'normal' && desktopBridge.attachmentTray === true && desktopBridge.attachmentInput === true && desktopBridge.titleBar?.menus?.join(',') === '文件,编辑,查看,帮助,桌宠' && desktopBridge.titleBar.title === '' && desktopBridge.titleBar.rootTop === 0 && desktopBridge.titleBar.barBottom > 0 && report.browserStartsWithoutGuest && report.browserStartsWithBlankTab && !security.noSandboxSwitch && !security.debugPortConfigured);
+  report.ok = Boolean(checks.ok && lifecycle.didFinishLoad && !lifecycle.mainFrameLoadError && !lifecycle.renderProcessGone && !lifecycle.uncaughtScriptError && security.nodeIntegration === false && security.contextIsolation === true && security.sandbox === true && security.webSecurity === true && security.preloadConfigured && security.preloadIsExpected && security.sessionPreloadCount === 0 && security.backgroundThrottling === false && desktopBridge.keys.join(',') === 'browser,completionNotifications,copyImage,onOpenSession,remote,revealApiKey,testCompletionNotification' && desktopBridge.remoteKeys?.join(',') === 'disable,enable,installTunnel,pairLink,revoke,rotateSecret,setDispatch,setPlainLan,setTunnel,status' && desktopBridge.copyImage === 'function' && desktopBridge.revealApiKey === 'function' && desktopBridge.completionNotifications === true && desktopBridge.onOpenSession === 'function' && desktopBridge.testCompletionNotification === 'function' && desktopBridge.browserKeys.join(',') === 'act,activateTab,back,cancelDownload,clearDownloads,clearSiteData,closeTab,forward,getState,home,navigate,newTab,onDownloads,onState,openDevTools,openExternal,readPage,reload,reopenTab,revealDownload,screenshot,setPresentation,setViewport,snapshot,stop,visibility' && desktopBridge.browserState?.url === '' && desktopBridge.browserState?.loading === false && desktopBridge.browserState?.desktopZoomFactor > 0 && desktopBridge.browserState?.presentation?.mode === 'normal' && desktopBridge.attachmentTray === true && desktopBridge.attachmentInput === true && desktopBridge.titleBar?.menus?.join(',') === '文件,编辑,查看,帮助,桌宠' && desktopBridge.titleBar.title === '' && desktopBridge.titleBar.rootTop === 0 && desktopBridge.titleBar.barBottom > 0 && report.browserStartsWithoutGuest && report.browserStartsWithBlankTab && !security.noSandboxSwitch && !security.debugPortConfigured);
   const titleBarOk = Boolean(
     workspaceStartsClosed && titleBarThemes.every(item => item.menu === item.sidebar && item.chat === item.sidebar && item.caption === item.sidebar) &&
     titleBarLayout?.contain?.includes('layout') && titleBarLayout.contain.includes('paint')

@@ -6,8 +6,23 @@ import { abortError, checkAbort, waitForChildExit } from './util.mjs';
 
 const SCRIPT_URL = new URL('./windows-file-actions.ps1', import.meta.url);
 const APPLICATIONS_SCRIPT_URL = new URL('./windows-applications.ps1', import.meta.url);
-let scriptPromise;
-let applicationsScriptPromise;
+let scriptPromise = null;
+let applicationsScriptPromise = null;
+
+function loadActionScript(applicationAction) {
+  if (applicationAction) {
+    applicationsScriptPromise ??= fs.readFile(APPLICATIONS_SCRIPT_URL, 'utf8').catch(error => {
+      applicationsScriptPromise = null;
+      throw error;
+    });
+    return applicationsScriptPromise;
+  }
+  scriptPromise ??= fs.readFile(SCRIPT_URL, 'utf8').catch(error => {
+    scriptPromise = null;
+    throw error;
+  });
+  return scriptPromise;
+}
 
 async function runWindowsFileAction(action, { absolutePath, workspace, signal, applicationId }) {
   checkAbort(signal);
@@ -15,9 +30,7 @@ async function runWindowsFileAction(action, { absolutePath, workspace, signal, a
     throw new Error('请选择应用列表中的有效应用。');
   }
   const applicationAction = action === 'applications' || action === 'application';
-  const script = await (applicationAction
-    ? (applicationsScriptPromise ??= fs.readFile(APPLICATIONS_SCRIPT_URL, 'utf8'))
-    : (scriptPromise ??= fs.readFile(SCRIPT_URL, 'utf8')));
+  const script = await loadActionScript(applicationAction);
   checkAbort(signal);
   const executable = path.join(process.env.SystemRoot || 'C:\\Windows', 'System32', 'WindowsPowerShell', 'v1.0', 'powershell.exe');
   // The script is static and may live inside app.asar. User paths are environment data, never code or arguments.

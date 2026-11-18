@@ -1,9 +1,9 @@
 {
   "name": "harness-gemini-development",
-  "version": "1.6.8",
+  "version": "2.0.2",
   "private": true,
   "type": "module",
-  "description": "Development and packaging tools for Harness Gemini 1.6.8",
+  "description": "Development and packaging tools for Harness Gemini 2.0.2",
   "engines": {
     "node": ">=22.12"
   },

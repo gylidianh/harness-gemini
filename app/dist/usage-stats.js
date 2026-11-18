@@ -357,6 +357,41 @@ export function buildAppUsageModelPieChartViewModel(snapshot) {
   };
 }
 
+export function computePieSliceSweeps(shares, minAngle = 2) {
+  if (!Array.isArray(shares) || !shares.length) return [];
+  const clean = shares.map(v => (Number.isFinite(v) && v > 0 ? v : 0));
+  const totalShare = clean.reduce((sum, v) => sum + v, 0);
+  if (totalShare <= 0) return clean.map(() => 0);
+  const positiveCount = clean.filter(v => v > 0).length;
+  if (positiveCount <= 1) return clean.map(v => (v > 0 ? 360 : 0));
+
+  const floor = Math.max(0, Math.min(minAngle, 360 / positiveCount));
+  const sweeps = clean.map(v => (v > 0 ? Math.max(floor, (v / totalShare) * 360) : 0));
+  const excess = sweeps.reduce((sum, angle) => sum + angle, 0) - 360;
+
+  if (excess > 0) {
+    const totalSurplus = sweeps.reduce((sum, angle) => sum + Math.max(0, angle - floor), 0);
+    if (totalSurplus > 0) {
+      const scale = Math.max(0, (totalSurplus - excess) / totalSurplus);
+      for (let i = 0; i < sweeps.length; i++) {
+        if (sweeps[i] > floor) {
+          sweeps[i] = floor + (sweeps[i] - floor) * scale;
+        }
+      }
+    }
+  }
+
+  let maxIdx = 0;
+  for (let i = 1; i < sweeps.length; i++) {
+    if (sweeps[i] > sweeps[maxIdx]) maxIdx = i;
+  }
+  const drift = 360 - sweeps.reduce((sum, angle) => sum + angle, 0);
+  if (Math.abs(drift) > 0 && sweeps[maxIdx] + drift >= floor) {
+    sweeps[maxIdx] += drift;
+  }
+  return sweeps;
+}
+
 // ── SVG geometry helpers for smooth line & donut charts ───────────────────
 
 function buildMonotonePath(points) {
@@ -743,14 +778,16 @@ export function createUsageStatsUI(React) {
     const outerR = 92;
     const innerR = 60;
     const padAngle = chartData.length > 1 ? 2 : 0;
+    const sweeps = computePieSliceSweeps(chartData.map(slice => slice.share), 2);
     let cursor = 0;
-    const arcs = chartData.map(slice => {
-      const sweep = Math.max(2, slice.share * 360);
+    const arcs = chartData.map((slice, index) => {
+      const sweep = sweeps[index] ?? 0;
       const start = cursor + padAngle / 2;
       const end = cursor + sweep - padAngle / 2;
       cursor += sweep;
       return {
         ...slice,
+        sweep,
         path: describeDonutSector(cx, cy, outerR, innerR, start, Math.max(start + 0.5, end)),
       };
     });

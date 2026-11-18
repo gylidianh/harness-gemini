@@ -1,0 +1,1306 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="color-scheme" content="light dark">
+<meta name="theme-color" content="#f6f7f9" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0f1115" media="(prefers-color-scheme: dark)">
+<meta name="referrer" content="no-referrer">
+<title>Harness 远程</title>
+<style>
+  :root{
+    --bg:#f6f7f9; --card:#ffffff; --fg:#15181e; --muted:#6b7280; --line:#e6e8ec;
+    --chip:#eef0f4; --accent:#5b5bd6; --accent-fg:#ffffff; --danger:#d64242; --ok:#16a34a;
+    --warn:#b7791f; --shadow:0 1px 2px rgba(16,24,40,.06),0 8px 24px rgba(16,24,40,.06);
+    --radius:16px; --tab-h:62px;
+  }
+  @media (prefers-color-scheme: dark){
+    :root{
+      --bg:#0f1115; --card:#161a21; --fg:#e8ebf0; --muted:#98a2b3; --line:#242a34;
+      --chip:#1e2430; --accent:#8b8bf0; --accent-fg:#10121a; --danger:#f87171; --ok:#4ade80;
+      --warn:#fbbf24; --shadow:0 1px 2px rgba(0,0,0,.5),0 10px 30px rgba(0,0,0,.35);
+    }
+  }
+  *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+  html,body{height:100%}
+  body{
+    margin:0;background:var(--bg);color:var(--fg);
+    font:15px/1.55 -apple-system,BlinkMacSystemFont,"SF Pro SC","PingFang SC","Microsoft YaHei",system-ui,sans-serif;
+    -webkit-font-smoothing:antialiased;
+  }
+  /* ---------- 顶栏 ---------- */
+  header{
+    position:sticky;top:0;z-index:20;display:flex;align-items:center;gap:10px;
+    padding:calc(10px + env(safe-area-inset-top)) 16px 10px;
+    background:color-mix(in srgb,var(--bg) 86%,transparent);
+    backdrop-filter:saturate(160%) blur(14px);border-bottom:1px solid var(--line);
+  }
+  .brand{font-size:16px;font-weight:650;letter-spacing:.2px;flex:1;min-width:0}
+  .brand small{display:block;font-weight:400;font-size:11px;color:var(--muted);letter-spacing:0}
+  .chip{
+    display:inline-flex;align-items:center;gap:6px;padding:5px 10px;border-radius:999px;
+    background:var(--chip);color:var(--muted);font-size:12px;white-space:nowrap;
+  }
+  .dot{width:7px;height:7px;border-radius:50%;background:var(--muted);flex:none}
+  .dot.on{background:var(--ok);box-shadow:0 0 0 3px color-mix(in srgb,var(--ok) 22%,transparent)}
+  .dot.bad{background:var(--danger)}
+  .iconbtn{
+    width:34px;height:34px;border-radius:10px;border:1px solid var(--line);background:var(--card);
+    color:var(--fg);display:grid;place-items:center;padding:0;font-size:15px;
+  }
+  .iconbtn:active{transform:scale(.96)}
+  /* ---------- 内容 ---------- */
+  main{padding:14px 16px calc(var(--tab-h) + 26px + env(safe-area-inset-bottom))}
+  .view{display:none;animation:fade .18s ease}
+  .view.active{display:block}
+  @keyframes fade{from{opacity:0;transform:translateY(4px)}to{opacity:1;transform:none}}
+  .muted{color:var(--muted);font-size:13px}
+  .card{
+    background:var(--card);border:1px solid var(--line);border-radius:var(--radius);
+    padding:14px;margin-bottom:12px;box-shadow:var(--shadow);
+  }
+  .card-head{display:flex;align-items:center;gap:8px;margin-bottom:8px}
+  .card-title{font-weight:600;font-size:14px;flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .tool{
+    font:600 11px/1 ui-monospace,SFMono-Regular,Consolas,monospace;letter-spacing:.3px;
+    padding:5px 8px;border-radius:7px;background:color-mix(in srgb,var(--accent) 14%,transparent);
+    color:var(--accent);white-space:nowrap;flex:none;
+  }
+  .tag{padding:3px 8px;border-radius:999px;background:var(--chip);color:var(--muted);font-size:11px;flex:none}
+  .tag.wait{background:color-mix(in srgb,var(--warn) 18%,transparent);color:var(--warn)}
+  .tag.run{background:color-mix(in srgb,var(--accent) 16%,transparent);color:var(--accent)}
+  .code{
+    margin:8px 0 0;padding:10px 12px;border-radius:11px;background:var(--chip);
+    font:12.5px/1.5 ui-monospace,SFMono-Regular,Consolas,monospace;
+    white-space:pre-wrap;word-break:break-word;max-height:180px;overflow:auto;
+  }
+  .reason{margin-top:8px;color:var(--muted);font-size:12.5px}
+  .actions{display:flex;gap:10px;margin-top:12px}
+  .btn{
+    flex:1;min-height:44px;border-radius:12px;border:1px solid var(--line);background:var(--card);
+    color:var(--fg);font:600 14px/1 inherit;display:inline-flex;align-items:center;justify-content:center;
+    gap:6px;padding:0 14px;
+  }
+  .btn:active{transform:scale(.985)}
+  .btn[disabled]{opacity:.5}
+  .btn-primary{background:var(--accent);border-color:var(--accent);color:var(--accent-fg)}
+  .btn-danger{color:var(--danger);border-color:color-mix(in srgb,var(--danger) 45%,var(--line))}
+  .btn-ghost{background:transparent}
+  .btn-block{width:100%;flex:none}
+  .opt{
+    width:100%;text-align:left;justify-content:flex-start;margin-bottom:8px;background:var(--chip);
+    border-color:transparent;font-weight:500;
+  }
+  .opt:active{border-color:var(--accent)}
+  input,textarea,select{
+    width:100%;font:inherit;color:var(--fg);background:var(--card);
+    border:1px solid var(--line);border-radius:12px;padding:11px 12px;outline:none;
+  }
+  input:focus,textarea:focus,select:focus{border-color:var(--accent);box-shadow:0 0 0 3px color-mix(in srgb,var(--accent) 18%,transparent)}
+  textarea{resize:vertical;min-height:92px}
+  label.field{display:block;margin-bottom:10px}
+  label.field > span{display:block;font-size:12.5px;color:var(--muted);margin-bottom:6px}
+  .section-title{display:flex;align-items:center;gap:8px;margin:18px 2px 10px;font-size:13px;color:var(--muted);font-weight:600}
+  .count{background:var(--chip);border-radius:999px;padding:1px 8px;font-size:11px;font-weight:600;color:var(--muted)}
+  .empty{padding:26px 10px;text-align:center;color:var(--muted);font-size:13px}
+  .kv{display:flex;justify-content:space-between;gap:12px;padding:7px 0;font-size:13.5px;border-bottom:1px solid var(--line)}
+  .kv:last-child{border-bottom:0}
+  .kv b{font-weight:600;font-family:ui-monospace,Consolas,monospace;font-size:12.5px}
+  .list-item{
+    display:flex;align-items:center;gap:10px;padding:12px 4px;border-bottom:1px solid var(--line);
+  }
+  .list-item:last-child{border-bottom:0}
+  .list-item .grow{flex:1;min-width:0}
+  .list-item .t{font-size:14px;font-weight:550;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .list-item .s{font-size:11.5px;color:var(--muted);margin-top:2px}
+  /* ---------- 底部标签 ---------- */
+  nav.tabs{
+    position:fixed;left:0;right:0;bottom:0;z-index:25;height:calc(var(--tab-h) + env(safe-area-inset-bottom));
+    padding-bottom:env(safe-area-inset-bottom);
+    display:grid;grid-template-columns:repeat(4,1fr);
+    background:color-mix(in srgb,var(--bg) 92%,transparent);
+    backdrop-filter:saturate(160%) blur(14px);border-top:1px solid var(--line);
+  }
+  nav.tabs button{
+    position:relative;border:0;background:transparent;color:var(--muted);font:500 11px/1 inherit;
+    display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;padding:0;
+  }
+  nav.tabs button svg{width:21px;height:21px;display:block}
+  nav.tabs button.on{color:var(--accent)}
+  nav.tabs button.on svg{transform:translateY(-1px)}
+  .badge{
+    position:absolute;top:6px;right:calc(50% - 20px);min-width:17px;height:17px;padding:0 5px;
+    border-radius:999px;background:var(--danger);color:#fff;font-size:10.5px;font-weight:700;
+    display:none;align-items:center;justify-content:center;
+  }
+  .badge.show{display:flex}
+  /* ---------- 配对页 ---------- */
+  #pairCard{padding:22px 18px;margin-top:6px}
+  #pairCard h2{margin:0 0 6px;font-size:19px;letter-spacing:.2px}
+  #pairCard p{margin:0 0 16px;color:var(--muted);font-size:13px;line-height:1.6}
+  .err{color:var(--danger);font-size:12.5px;margin-top:10px;white-space:pre-wrap}
+  .hide{display:none !important}
+  /* ---------- toast ---------- */
+  #toast{
+    position:fixed;left:50%;bottom:calc(var(--tab-h) + 18px + env(safe-area-inset-bottom));
+    transform:translate(-50%,12px);z-index:40;max-width:86vw;
+    padding:10px 16px;border-radius:12px;background:#101318;color:#fff;font-size:13px;
+    box-shadow:0 10px 30px rgba(0,0,0,.3);opacity:0;pointer-events:none;transition:.2s ease;
+  }
+  #toast.show{opacity:1;transform:translate(-50%,0)}
+  @media (prefers-color-scheme: dark){ #toast{background:#2a3140} }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="brand">远程<small id="deviceText">未配对</small></div>
+  <span class="chip"><span class="dot" id="dot"></span><span id="statusText">未连接</span></span>
+  <button class="iconbtn" id="refreshBtn" aria-label="刷新">⟳</button>
+</header>
+
+<main>
+
+  <!-- 配对 -->
+  <section class="card" id="pairCard">
+    <h2>连接你的电脑</h2>
+    <p>在电脑端「设置 → 远程连接」里扫描二维码，或把配对码粘贴到下面。配对码只在这一台手机和你的电脑之间使用。</p>
+    <label class="field">
+      <span>配对码</span>
+      <input id="pairCode" placeholder="粘贴配对码" autocomplete="off" autocapitalize="off" spellcheck="false">
+    </label>
+    <button class="btn btn-primary btn-block" id="pairBtn" disabled>配对并连接</button>
+    <div class="err hide" id="pairError"></div>
+    <div class="err hide" id="transportError"></div>
+    <p style="margin-top:14px;margin-bottom:0" id="privacyNote">端到端加密：中继只转发密文，看不到审批内容、命令和标题。</p>
+  </section>
+
+  <!-- 已配对 -->
+  <div id="app" class="hide">
+    <div id="connectionError" class="err hide" role="status" aria-live="polite"></div>
+
+    <!-- 待办 -->
+    <section class="view active" id="view-pending">
+      <div class="empty" id="emptyCard">暂无待处理事项</div>
+
+      <div class="section-title" id="approvalsTitle" style="display:none">待批准 <span class="count" id="approvalsCount">0</span></div>
+      <div id="approvals"></div>
+
+      <div class="section-title" id="questionsTitle" style="display:none">待回答 <span class="count" id="questionsCount">0</span></div>
+      <div id="questions"></div>
+      <div class="section-title" id="teamsTitle" style="display:none">待确认团队 <span class="count" id="teamsCount">0</span></div>
+      <div id="teamConfigurations"></div>
+
+      <div class="section-title" id="liveTitle" style="display:none">进行中 <span class="count" id="liveCount">0</span></div>
+      <div id="live"></div>
+    </section>
+
+    <!-- 会话 -->
+    <section class="view" id="view-sessions">
+      <div class="card" style="padding:4px 14px">
+        <div id="sessionList"><div class="empty">暂无会话</div></div>
+      </div>
+      <div class="muted" style="text-align:center;margin-top:6px">点会话可选中用于派任务</div>
+    </section>
+
+    <!-- 任务 -->
+    <section class="view" id="view-tasks">
+      <div class="card">
+        <label class="field">
+          <span>目标会话</span>
+          <select id="dispatchSession"></select>
+        </label>
+        <label class="field">
+          <span>任务内容</span>
+          <textarea id="dispatchText" placeholder="交给这个会话执行的内容"></textarea>
+        </label>
+        <label class="field">
+          <span>模式</span>
+          <select id="dispatchMode">
+            <option value="chat">聊天</option>
+            <option value="agent">代理</option>
+          </select>
+        </label>
+        <button class="btn btn-primary btn-block" id="dispatchBtn">发送到电脑</button>
+        <div class="muted" id="dispatchHint" style="margin-top:10px">需要电脑端开启「允许手机派发新任务」，且审批模式不能是「完整访问」。</div>
+        <div class="err hide" id="dispatchError"></div>
+      </div>
+    </section>
+
+    <!-- 设置 -->
+    <section class="view" id="view-settings">
+      <div class="card">
+        <div class="card-head"><div class="card-title">这台手机</div></div>
+        <div class="kv"><span class="muted">设备编号</span><b id="deviceIdText">—</b></div>
+        <div class="kv"><span class="muted">连接状态</span><span id="connText">—</span></div>
+        <div class="kv"><span class="muted">传输</span><span id="transportText">—</span></div>
+        <div class="kv"><span class="muted">通知</span><span id="notifyText">读取中</span></div>
+        <div class="actions" style="margin-top:12px">
+          <button class="btn" id="notifyBtn" disabled>开启通知</button>
+          <button class="btn" id="refreshDataBtn">刷新数据</button>
+        </div>
+        <div class="muted" id="notifyHint" style="margin-top:10px"></div>
+      </div>
+
+      <div class="card">
+        <div class="card-head"><div class="card-title">解除配对</div></div>
+        <div class="muted">解除后这台手机立即失去访问权，需要重新扫码。</div>
+        <div class="actions" style="margin-top:12px">
+          <button class="btn btn-danger btn-block" id="forgetBtn">本机解除配对</button>
+        </div>
+      </div>
+
+      <div class="muted" style="text-align:center;margin-top:8px;line-height:1.8">
+        审批与派发都在电脑本机执行<br><span id="footerNote">中继只见密文</span>
+      </div>
+    </section>
+
+  </div>
+</main>
+
+<nav class="tabs" id="tabs">
+  <button data-tab="pending" class="on" aria-label="待办">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 01-2 2H5a2 2 0 01-2-2V5a2 2 0 012-2h11"/></svg>
+    待办<span class="badge" id="badgePending">0</span>
+  </button>
+  <button data-tab="sessions" aria-label="会话">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z"/></svg>
+    会话
+  </button>
+  <button data-tab="tasks" aria-label="任务">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M12 5v14M5 12h14"/></svg>
+    任务
+  </button>
+  <button data-tab="settings" aria-label="设置">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 11-2.83 2.83l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 11-4 0v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 11-2.83-2.83l.06-.06A1.65 1.65 0 004.6 15a1.65 1.65 0 00-1.51-1H3a2 2 0 110-4h.09A1.65 1.65 0 004.6 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 112.83-2.83l.06.06A1.65 1.65 0 009 4.6a1.65 1.65 0 001-1.51V3a2 2 0 114 0v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 112.83 2.83l-.06.06A1.65 1.65 0 0019.4 9a1.65 1.65 0 001.51 1H21a2 2 0 110 4h-.09a1.65 1.65 0 00-1.51 1z"/></svg>
+    设置
+  </button>
+</nav>
+
+<div id="toast"></div>
+
+<script type="module">
+import { deriveDeviceKey, fromBase64Url, isPlainEnvelope, open, openPlain, seal, sealPlain, sha256Hex } from '/phone/relay-protocol.mjs';
+// Shared with the service worker, which cannot read localStorage and must derive the same key.
+import { clearDevice, readDevice, writeDevice } from '/phone/device-store.mjs';
+
+const STORE_KEY = 'harness-relay-device';
+const $ = id => document.getElementById(id);
+
+let toastTimer = 0;
+function toast(text) {
+  const node = $('toast');
+  node.textContent = text;
+  node.classList.add('show');
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => node.classList.remove('show'), 2400);
+}
+const say = text => { toast(text); console.warn(text); };
+
+let device = null;   // { deviceId, token, secret }
+let key = null;      // CryptoKey derived from device.secret + deviceId (sealed transport only)
+let streamAbort = null;
+// 传输方式由服务端声明，页面不自己猜：
+//   sealed —— https（或本机 localhost）才有 WebCrypto，审批内容端到端加密；
+//   plain  —— 局域网 http 没有 subtle，主机明确同意后走明文通道，令牌就是全部凭据。
+let transport = 'sealed';
+let directHttp = false;
+let negotiationError = '';
+let bootReady = false; // Pairing must not race the initial persisted-device read.
+let generation = 0;
+const requests = new Set();
+const HTTP_TIMEOUT_MS = 35_000;
+let pollTimer = 0;
+let pollFlight = null;
+let pollFailures = 0;
+let sessionsReadAt = 0;
+let pendingLoaded = false;
+let sessionsLoaded = false;
+
+function staleConnection() { return new Error('连接已更新，请重试。'); }
+function assertGeneration(epoch) { if (epoch !== generation || !device) throw staleConnection(); }
+function connectionError(error) {
+  $('connectionError').textContent = error?.message ?? '';
+  $('connectionError').classList.toggle('hide', !error);
+  if (error) setDot('bad');
+}
+function stopConnection() {
+  generation += 1;
+  renderTeamConfigurations([]);
+  renderQuestions([]); answeredQuestions.clear();
+  clearTimeout(pollTimer); pollTimer = 0; pollFlight = null;
+  streamAbort?.abort(); streamAbort = null; streamReady = null;
+  for (const controller of requests) controller.abort();
+  requests.clear();
+  for (const waiter of pending.values()) waiter.reject(staleConnection());
+  pending.clear(); connectedOnce = false;
+}
+
+// The deadline covers BOTH response headers and JSON body, including a stalled proxy.
+async function fetchJson(url, options = {}, timeout = HTTP_TIMEOUT_MS) {
+  const controller = new AbortController();
+  requests.add(controller);
+  let timer;
+  const deadline = new Promise((_, reject) => {
+    timer = setTimeout(() => {
+      reject(new Error('请求超时，请检查电脑和远程地址后重试。'));
+      controller.abort();
+    }, timeout);
+  });
+  const aborted = new Promise((_, reject) => {
+    controller.signal.addEventListener('abort', () => reject(new Error('连接请求已取消。')), { once: true });
+  });
+  try {
+    return await Promise.race([(async () => {
+      const response = await fetch(url, { ...options, signal: controller.signal });
+      // Authentication must not wait for an error body's streaming/proxy behaviour.
+      if (response.status === 401) return { response, body: {} };
+      const body = await response.json();
+      return { response, body };
+    })(), deadline, aborted]);
+  } finally { clearTimeout(timer); requests.delete(controller); }
+}
+
+const pending = new Map(); // envelope id -> { resolve, reject }
+
+// relay / 旧直连的回包走 SSE，HTTP 202 只代表「中继收下了」；新直连走 HTTP RPC，不需要流。
+//   streamReady —— 这一轮连接的就绪信号，服务端建流后第一件事就是发 event: hello；
+//   connectedOnce —— 之前连上过，用来在断线重连后自动补一次会话列表。
+let streamReady = null;
+let connectedOnce = false;
+const STREAM_READY_MS = 2_000;    // 等 hello 的上限：等不到也照常继续，begin() 不会被永久 await 卡住
+const INVOKE_RETRY_MS = 8_000;    // 这么久没回包就提示；只对列表读取重发同一信封，写操作不得自动重发
+const INVOKE_TIMEOUT_MS = 15_000; // 再等不到就明确报错，页面不会无声地停在等一个不会来的回包上
+
+/**
+ * 这一页现在能不能发请求。
+ * 明文传输本来就没有密钥：局域网 http 不是安全上下文，begin() 里 key 只能是 null，
+ * 主机明确同意后令牌就是明文通道的全部凭据。
+ * 以前把 key 当配对凭据判断，直连时 invoke() 一律抛「尚未配对」，
+ * refreshSessions()/refreshAll() 直接 return，会话列表、待办、派发就全停在初始状态。
+ * 所以这里只看有没有配对记录，以及这种传输方式需不需要密钥。
+ */
+function ready() {
+  return Boolean(device) && (transport === 'plain' || Boolean(key));
+}
+
+/** 一轮连接的就绪信号：收到 hello 时 arrive()，等待方立刻放行。 */
+function streamGate() {
+  let arrive = () => {};
+  const promise = new Promise(resolve => { arrive = () => resolve(true); });
+  return { promise, arrive };
+}
+
+/**
+ * 等到这一轮连接的 hello 落地，最多等 STREAM_READY_MS。
+ * 上限是硬要求：电脑没响应时只多等这么久；invoke 另有回包期限。
+ * 兼容 relay 不承诺缓存回包，不能把 HTTP 202 当成操作成功。
+ */
+async function waitForStream(ms) {
+  const gate = streamReady;
+  if (!gate) return false;
+  const cap = Number.isFinite(ms) ? ms : STREAM_READY_MS;
+  let timer = 0;
+  const late = new Promise(resolve => { timer = setTimeout(() => resolve(false), Math.max(0, cap)); });
+  try { return await Promise.race([gate.promise, late]); }
+  finally { clearTimeout(timer); }
+}
+
+/** HTTPS 也协商 HTTP RPC；已知 Quick Tunnel 不支持 SSE，协商失败必须停止启动。 */
+async function detectTransport() {
+  directHttp = false;
+  negotiationError = '';
+  const quickTunnel = /\.trycloudflare\.com$/i.test(location.hostname ?? '');
+  try {
+    const { response, body } = await fetchJson('/healthz', { cache: 'no-store' }, 8_000);
+    if (response.ok) {
+      directHttp = body?.mode === 'direct' && body?.rpcVersion === 1;
+      if (quickTunnel && !directHttp) {
+        negotiationError = body?.mode === 'direct'
+          ? '请升级电脑端：当前直连服务不支持 HTTP RPC，Cloudflare Quick Tunnel 无法使用 SSE。'
+          : '直连服务暂不可用，请刷新页面/检查电脑。';
+        return '';
+      }
+      if (globalThis.crypto?.subtle && globalThis.isSecureContext !== false) return 'sealed';
+      if (body?.plainText === true) return 'plain';
+    }
+  } catch { /* 一般旧 relay 可回退密封 SSE；Quick Tunnel 不允许这个坏路径。 */ }
+  if (quickTunnel) {
+    negotiationError = '直连服务暂不可用，请刷新页面/检查电脑。';
+    return '';
+  }
+  return globalThis.crypto?.subtle && globalThis.isSecureContext !== false ? 'sealed' : '';
+}
+
+// ---------- 标签页 ----------
+function setTab(name) {
+  for (const view of document.querySelectorAll('.view')) view.classList.toggle('active', view.id === `view-${name}`);
+  for (const button of $('tabs').querySelectorAll('button')) button.classList.toggle('on', button.dataset.tab === name);
+  if (name === 'sessions') void refreshSessions();
+  if (name === 'settings') void refreshNotifyState();
+  window.scrollTo({ top: 0 });
+}
+$('tabs').addEventListener('click', event => {
+  const button = event.target.closest('button[data-tab]');
+  if (button) setTab(button.dataset.tab);
+});
+
+// ---------- 设备存储 ----------
+async function load() {
+  const stored = await readDevice();
+  if (stored) return stored;
+  // One-time move out of localStorage: a service worker cannot read it, so a device paired by
+  // an older page would never receive a notification.
+  try {
+    const legacy = JSON.parse(localStorage.getItem(STORE_KEY) ?? 'null');
+    if (legacy?.deviceId && legacy?.token && legacy?.secret) {
+      await writeDevice(legacy);
+      localStorage.removeItem(STORE_KEY);
+      return legacy;
+    }
+  } catch { /* a broken legacy record is simply dropped */ }
+  return null;
+}
+async function save(value) { await writeDevice(value); }
+
+function setDot(state) {
+  $('dot').className = `dot ${state === 'on' ? 'on' : state === 'bad' ? 'bad' : ''}`;
+  $('statusText').textContent = state === 'on' ? '已连接' : state === 'bad' ? '重连中' : '未连接';
+  $('connText').textContent = state === 'on' ? '已连接电脑' : state === 'bad' ? '连接中断，正在重试' : '未连接';
+}
+
+async function pair() {
+  if (!bootReady || !transport) return; // Initial device read and negotiation must both finish.
+  const code = $('pairCode').value.trim();
+  if (!code) return;
+  $('pairError').classList.add('hide');
+  try { fromBase64Url(code); } catch { $('pairError').textContent = '配对码看起来不完整。'; $('pairError').classList.remove('hide'); return; }
+  $('pairBtn').disabled = true;
+  try {
+    const { response, body } = await fetchJson('/pair', {
+      method: 'POST', headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ codeHash: await sha256Hex(code), transport }),
+    });
+    if (!response.ok) throw new Error(body.error ?? `配对失败（${response.status}）。`);
+    device = { deviceId: body.deviceId, token: body.token, secret: code };
+    await save(device);
+    await begin();
+    toast('配对成功');
+  } catch (error) {
+    $('pairError').textContent = error.message;
+    $('pairError').classList.remove('hide');
+  } finally {
+    $('pairBtn').disabled = !bootReady || !transport;
+  }
+}
+
+/**
+ * 把一个信封投给中继。
+ *   202 —— 收下了，回包走 SSE；
+ *   409 —— ReplayGuard 认为这个 id 之前已经收过。那不是失败，而是「电脑早就拿到了，只是在等回包」，
+ *          所以既不报错也不换新 id（换新 id 会把 approval.decide 这类写操作变成第二次操作），
+ *          调用方继续等同一个信封的回包即可。
+ */
+async function postEnvelope(envelope) {
+  const epoch = generation;
+  const current = device;
+  const { response, body } = await fetchJson('/phone/invoke', {
+    method: 'POST',
+    headers: { 'content-type': 'application/json', authorization: `Bearer ${current.token}` },
+    body: JSON.stringify({ deviceId: current.deviceId, envelope }),
+  }, INVOKE_TIMEOUT_MS);
+  assertGeneration(epoch);
+  if (response.status === 401) { await revoked(); throw new Error('设备凭据已失效，请重新配对。'); }
+  if (response.ok) return { accepted: true, replayed: false };
+  if (response.status === 409) return { accepted: false, replayed: true };
+  throw new Error(body.error ?? `中继拒绝（${response.status}）。`);
+}
+
+async function invokeHttp(action, params) {
+  const epoch = generation;
+  const current = device;
+  const currentTransport = transport;
+  const currentKey = key;
+  try {
+    const envelope = currentTransport === 'plain'
+      ? sealPlain('invoke', { action, params })
+      : await seal(currentKey, 'invoke', { action, params });
+    assertGeneration(epoch);
+    let response, body;
+    try {
+      ({ response, body } = await fetchJson('/phone/invoke', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json', authorization: `Bearer ${current.token}` },
+      body: JSON.stringify({ deviceId: current.deviceId, envelope, replyMode: 'http' }),
+      }));
+    } catch (error) {
+      if (epoch === generation && ['approval.decide', 'question.answer', 'team.configuration.submit', 'run.stop', 'task.dispatch'].includes(action)) {
+        throw new Error(`结果未确认，请先查看电脑执行状态，不要重复提交。（${error.message}）`);
+      }
+      throw error;
+    }
+    assertGeneration(epoch);
+    if (response.status === 401) { await revoked(); throw new Error('设备凭据已失效，请重新配对。'); }
+    if (!response.ok) throw new Error(body.error ?? `电脑返回 ${response.status}`);
+    // No transport downgrade: an HTTPS request may never accept an unsealed response.
+    if (isPlainEnvelope(body.envelope) !== (currentTransport === 'plain')) throw new Error('电脑返回了不匹配的传输格式。');
+    const message = currentTransport === 'plain' ? openPlain(body.envelope) : await open(currentKey, body.envelope);
+    assertGeneration(epoch);
+    if (message.type !== 'result' || message.payload?.replyTo !== envelope.id) throw new Error('电脑返回了不匹配的请求结果。');
+    setDot('on');
+    if (message.payload.ok !== true) throw new Error(message.payload.message ?? '电脑拒绝了这次操作。');
+    return message.payload.data;
+  } catch (error) {
+    if (epoch === generation) connectionError(error);
+    throw error;
+  }
+}
+
+/**
+ * 挂上等待，并给这次调用定好两件事：什么时候提示重发、什么时候放弃。
+ * 只有列表读取允许重发同一个信封（同一个 id）；写操作只等待，防止重复执行。
+ */
+function expectResult(envelope, action) {
+  const timers = [];
+  const clear = () => { for (const timer of timers.splice(0)) clearTimeout(timer); };
+  let settle = null;
+  const promise = new Promise((resolve, reject) => { settle = { resolve, reject }; });
+  void promise.catch(() => {}); // attach immediately, before the HTTP request can stall
+  const waiter = {
+    resolve(value) { clear(); pending.delete(envelope.id); settle.resolve(value); },
+    reject(error) { clear(); pending.delete(envelope.id); settle.reject(error); },
+    cancel() { clear(); pending.delete(envelope.id); },
+  };
+  pending.set(envelope.id, waiter);
+  timers.push(setTimeout(() => {
+    if (!pending.has(envelope.id)) return;
+    say(['pending.list', 'sessions.list'].includes(action) ? '电脑没有回应，正在重试…' : '正在等待电脑确认，请勿重复提交。');
+    if (['pending.list', 'sessions.list'].includes(action)) void postEnvelope(envelope).catch(() => {});
+  }, INVOKE_RETRY_MS));
+  timers.push(setTimeout(() => {
+    if (!pending.has(envelope.id)) return;
+    waiter.reject(new Error('电脑没有回应，请确认电脑端还开着、手机和电脑在同一 Wi-Fi，再点「刷新」重试。'));
+  }, INVOKE_TIMEOUT_MS));
+  return { promise, waiter };
+}
+
+/** Sends one sealed request and waits for the matching result. */
+async function invoke(action, params) {
+  // 明文下没有密钥，只有「没配对」才算没就绪；密封传输缺密钥说明派生没成功，仍旧报错，不能假装发成功。
+  if (!ready()) throw new Error('尚未配对。');
+  if (directHttp) return invokeHttp(action, params);
+  const epoch = generation;
+  // 回包只走这条流：先等它就绪（最多 STREAM_READY_MS），别把回包投给一条还不存在的流。
+  await waitForStream();
+  const envelope = transport === 'plain'
+    ? sealPlain('invoke', { action, params })
+    : await seal(key, 'invoke', { action, params });
+  assertGeneration(epoch);
+  const { promise, waiter } = expectResult(envelope, action);
+  try {
+    await Promise.race([postEnvelope(envelope), promise]);
+  } catch (error) {
+    // 连中继都投不出去（401/429/断网）：这不是「电脑没有回应」，撤掉等待，把真正的原因交回去。
+    waiter.cancel();
+    throw error;
+  }
+  return promise;
+}
+
+function escapeHtml(value) {
+  return String(value ?? '').replace(/[&<>"']/g, character => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[character]));
+}
+
+function card(html) {
+  const holder = document.createElement('div');
+  holder.className = 'card';
+  holder.innerHTML = html;
+  return holder;
+}
+
+const MODE_TEXT = { chat: '聊天', agent: '代理', waiting: '等待你', running: '运行中', done: '已完成', error: '出错' };
+
+// Keep the actual input attached across HTTP polls and SSE snapshots. Restoring just
+// its value would still interrupt a mobile keyboard's selection and IME composition.
+const questionCards = new Map();
+const answeredQuestions = new Set();
+const questionKey = item => JSON.stringify([item.sessionId, item.questionId]);
+
+function visibleQuestions(items) {
+  // A read already in flight when a write succeeds can still contain the answered ID.
+  const pendingIds = new Set(items.map(questionKey));
+  for (const id of answeredQuestions) if (!pendingIds.has(id)) answeredQuestions.delete(id);
+  return items.filter(item => !answeredQuestions.has(questionKey(item)));
+}
+
+function createQuestionCard(id, item) {
+  const node = card(`
+    <div class="card-head"><span class="tag wait">提问</span><span class="card-title"></span></div>
+    <div class="reason" style="margin-top:0"></div>
+    <div data-options style="margin-top:10px"></div>
+    <input placeholder="或直接输入回答" style="margin-top:2px">
+    <div class="actions"><button class="btn btn-primary btn-block" data-send>提交回答</button></div>`);
+  const input = node.querySelector('input');
+  const entry = { node, sending: false, options: null };
+  const lock = yes => {
+    entry.sending = input.readOnly = yes;
+    node.querySelectorAll('button').forEach(button => { button.disabled = yes; });
+    node.style.opacity = yes ? '0.6' : '1';
+  };
+  const send = async () => {
+    const answer = input.value.trim();
+    if (!answer || entry.sending || questionCards.get(id) !== entry) return;
+    lock(true);
+    try {
+      await invoke('question.answer', { sessionId: item.sessionId, questionId: item.questionId, answer });
+      if (questionCards.get(id) !== entry) return;
+      answeredQuestions.add(id);
+      render(snapshot);
+      toast('回答已提交');
+    } catch (error) {
+      if (questionCards.get(id) !== entry) return;
+      lock(false);
+      say(error.message);
+    }
+  };
+  node.querySelector('[data-send]').onclick = send;
+  node.querySelector('[data-options]').onclick = event => {
+    const button = event.target.closest('[data-option]');
+    if (button && !entry.sending) { input.value = button.textContent; void send(); }
+  };
+  return entry;
+}
+
+function renderQuestions(items) {
+  const pendingIds = new Set();
+  for (const item of items) {
+    const id = questionKey(item);
+    pendingIds.add(id);
+    let entry = questionCards.get(id);
+    if (!entry) {
+      entry = createQuestionCard(id, item);
+      questionCards.set(id, entry);
+      $('questions').appendChild(entry.node);
+    }
+    // Update server-owned labels and choices, not the user-owned editor.
+    entry.node.querySelector('.card-title').textContent = item.title || '会话';
+    entry.node.querySelector('.reason').textContent = item.question;
+    const options = item.options ?? [];
+    const signature = JSON.stringify(options);
+    if (entry.options !== signature) {
+      entry.options = signature;
+      entry.node.querySelector('[data-options]').replaceChildren(...options.map((label, i) => {
+        const button = document.createElement('button');
+        button.className = 'btn opt'; button.dataset.option = i; button.textContent = label;
+        button.disabled = entry.sending;
+        return button;
+      }));
+    }
+  }
+  for (const [id, entry] of questionCards) {
+    if (!pendingIds.has(id)) { entry.node.remove(); questionCards.delete(id); }
+  }
+}
+
+// Team configuration is a separate pending gate, not an ask_user answer. The proposal is
+// immutable; keep its live form mounted until the specific proposal disappears.
+const teamCards = new Map();
+const submittedTeams = new Set();
+function renderTeamConfigurations(items) {
+  const host = $('teamConfigurations');
+  const ids = new Set(items.map(item => item.id));
+  for (const [id, node] of teamCards) if (!ids.has(id)) { node.remove(); teamCards.delete(id); }
+  for (const id of submittedTeams) if (!ids.has(id)) submittedTeams.delete(id);
+  const visible = items.filter(item => !submittedTeams.has(item.id));
+  for (const item of visible) {
+    if (teamCards.has(item.id)) continue;
+    const node = card(`<div class="card-head"><span class="tag wait">团队</span><span class="card-title">${escapeHtml(item.name || '成员配置')}</span></div>
+      <div data-setup>正在读取成员与连接…</div>`);
+    teamCards.set(item.id, node);
+    host.appendChild(node);
+    const current = () => teamCards.get(item.id) === node;
+    const params = { sessionId: item.sessionId, configurationId: item.id };
+    const area = node.querySelector('[data-setup]');
+    async function load() {
+      area.textContent = '正在读取成员与连接…';
+      try {
+        const config = await invoke('team.configuration.get', params);
+        if (!current()) return;
+        let offset = config.nextOffset;
+        while (offset != null) {
+          const page = await invoke('team.configuration.get', { ...params, offset });
+          if (!current()) return;
+          config.profiles.push(...page.profiles);
+          offset = page.nextOffset;
+        }
+        buildTeamForm(area, config, item.id, async (cancel, members) => {
+          await invoke('team.configuration.submit', { ...params, ...(cancel ? { cancel: true } : { members }) });
+          if (!current()) return;
+          submittedTeams.add(item.id);
+          node.remove(); teamCards.delete(item.id);
+          render(snapshot);
+          toast(cancel ? '已取消组队' : '已确认成员配置');
+        }, current);
+      } catch (error) {
+        if (!current()) return;
+        area.textContent = error.message;
+        const retry = document.createElement('button');
+        retry.className = 'btn'; retry.textContent = '重新读取'; retry.onclick = load;
+        area.appendChild(retry);
+      }
+    }
+    void load();
+  }
+  $('teamsTitle').style.display = visible.length ? '' : 'none';
+  $('teamsCount').textContent = String(visible.length);
+  return visible.length;
+}
+
+function buildTeamForm(area, config, configurationId, submit, current) {
+  // A datalist offers known models without excluding provider-specific custom IDs.
+  const modelsId = 'team-models-' + configurationId;
+  const models = [...new Set([config.leaderModel, ...config.profiles.map(p => p.defaultModel), ...config.members.map(m => m.model)].filter(m => m && m.length <= 120))];
+  area.innerHTML = `<div class="reason">${escapeHtml(config.goal)}</div>
+    <datalist id="${escapeHtml(modelsId)}">${models.map(m => `<option value="${escapeHtml(m)}"></option>`).join('')}</datalist>
+    ${config.members.map(member => `<div data-member>
+      <strong>${escapeHtml(member.name)} · ${escapeHtml(member.role)}</strong><div class="reason">${escapeHtml(member.task)}</div>
+      <label class="field"><span>连接</span><select data-profile>
+        <option value="">沿用队长连接${config.leaderProfileName ? ' · ' + escapeHtml(config.leaderProfileName) : ''}</option>
+        ${config.profiles.map(p => `<option value="${escapeHtml(p.id)}">${escapeHtml(p.name || p.id)}</option>`).join('')}
+      </select></label>
+      <label class="field"><span>模型（可选或输入模型 ID）</span><input data-model list="${escapeHtml(modelsId)}" maxlength="120" autocomplete="off" autocapitalize="none" spellcheck="false"></label>
+    </div>`).join('')}
+    <div class="actions"><button class="btn btn-danger" data-cancel>取消组队</button><button class="btn btn-primary" data-confirm>确认并启动</button></div>
+    <div class="reason" data-error role="status"></div>`;
+  const fields = [...area.querySelectorAll('[data-member]')].map((row, index) => {
+    const member = config.members[index], profile = row.querySelector('select'), model = row.querySelector('input');
+    if (member.profile && !config.profiles.some(p => p.id === member.profile)) {
+      profile.add(new Option(member.profile + '（连接不可用，请重选）', member.profile));
+    }
+    profile.value = member.profile;
+    model.value = member.model;
+    const hint = () => {
+      const inherited = profile.value ? config.profiles.find(p => p.id === profile.value)?.defaultModel : config.leaderModel;
+      model.placeholder = inherited ? '留空使用：' + inherited : '留空使用默认模型';
+    };
+    profile.onchange = hint; hint();
+    return () => ({ id: member.id, profile: profile.value, model: model.value.trim() });
+  });
+  let sending = false;
+  async function send(cancel) {
+    if (sending || !current()) return;
+    sending = true;
+    const controls = area.querySelectorAll('select,input,button');
+    controls.forEach(el => { el.disabled = true; });
+    const errorText = area.querySelector('[data-error]'); errorText.textContent = '';
+    try { await submit(cancel, fields.map(read => read())); }
+    catch (error) { if (current()) errorText.textContent = error.message; }
+    finally { sending = false; if (current()) controls.forEach(el => { el.disabled = false; }); }
+  }
+  area.querySelector('[data-confirm]').onclick = () => send(false);
+  area.querySelector('[data-cancel]').onclick = () => send(true);
+}
+
+// ---------- 渲染快照 ----------
+let snapshot = { approvals: [], questions: [], teamConfigurations: [], live: [] };
+
+function render(next) {
+  $('emptyCard').textContent = '暂无待处理事项';
+  snapshot = {
+    teamConfigurations: Array.isArray(next?.teamConfigurations) ? next.teamConfigurations : [],
+    approvals: Array.isArray(next?.approvals) ? next.approvals : [],
+    questions: Array.isArray(next?.questions) ? next.questions : [],
+    live: Array.isArray(next?.live) ? next.live : [],
+  };
+  const { approvals, live } = snapshot;
+  const questions = visibleQuestions(snapshot.questions);
+  const teamCount = renderTeamConfigurations(snapshot.teamConfigurations);
+
+  $('emptyCard').classList.toggle('hide', Boolean(approvals.length || questions.length || teamCount || live.length));
+  $('approvalsTitle').style.display = approvals.length ? '' : 'none';
+  $('questionsTitle').style.display = questions.length ? '' : 'none';
+  $('liveTitle').style.display = live.length ? '' : 'none';
+  $('approvalsCount').textContent = String(approvals.length);
+  $('questionsCount').textContent = String(questions.length);
+  $('liveCount').textContent = String(live.length);
+
+  const badge = approvals.length + questions.length + teamCount;
+  $('badgePending').textContent = String(badge);
+  $('badgePending').classList.toggle('show', badge > 0);
+
+  $('approvals').replaceChildren(...approvals.map(item => {
+    const node = card(`
+      <div class="card-head">
+        <span class="tool">${escapeHtml(item.tool || '工具')}</span>
+        <span class="card-title">${escapeHtml(item.title || '会话')}</span>
+      </div>
+      ${item.reason ? `<div class="reason">${escapeHtml(item.reason)}</div>` : ''}
+      <pre class="code">${escapeHtml(item.preview || '（无摘要）')}</pre>
+      <div class="actions">
+        <button class="btn btn-danger" data-deny>拒绝</button>
+        <button class="btn btn-primary" data-allow>允许</button>
+      </div>`);
+    node.querySelector('[data-allow]').onclick = () => decide(item, true, node);
+    node.querySelector('[data-deny]').onclick = () => decide(item, false, node);
+    return node;
+  }));
+
+  renderQuestions(questions);
+
+  $('live').replaceChildren(...live.map(item => {
+    const node = card(`
+      <div class="card-head">
+        <span class="tag ${item.state === 'waiting' ? 'wait' : 'run'}">${escapeHtml(MODE_TEXT[item.state] ?? item.state ?? '运行中')}</span>
+        <span class="card-title">${escapeHtml(item.title || '会话')}</span>
+      </div>
+      ${item.activity ? `<div class="reason" style="margin-top:0">正在 ${escapeHtml(item.activity)}</div>` : ''}
+      <div class="actions"><button class="btn btn-danger btn-block" data-stop>停止任务</button></div>`);
+    node.querySelector('[data-stop]').onclick = async () => {
+      node.style.opacity = '0.6';
+      try { await invoke('run.stop', { sessionId: item.sessionId }); node.remove(); toast('已停止'); }
+      catch (error) { node.style.opacity = '1'; say(error.message); }
+    };
+    return node;
+  }));
+}
+
+async function decide(item, approved, node) {
+  node.style.opacity = '0.5';
+  try {
+    await invoke('approval.decide', { approvalId: item.approvalId, sessionId: item.sessionId, approved });
+    node.remove();
+    toast(approved ? '已允许' : '已拒绝');
+  } catch (error) {
+    node.style.opacity = '1';
+    say(error.message);
+  }
+}
+
+async function handle(envelope) {
+  const epoch = generation;
+  let message;
+  // 按帧本身的形状开，而不是按本页猜的传输方式：用隧道配的对、现在用局域网地址打开，两边会不一致；
+  // 认帧就不会把一条本来能读懂的消息当垃圾丢掉。
+  try { message = isPlainEnvelope(envelope) ? openPlain(envelope) : await open(key, envelope); }
+  catch (error) { say(`丢弃一条无法验证的消息：${error.message}`); return; }
+  if (epoch !== generation) return;
+  if (message.type === 'pending.snapshot') { render(message.payload); return; }
+  if (message.type === 'result') {
+    const waiter = pending.get(message.payload.replyTo);
+    if (!waiter) return;
+    pending.delete(message.payload.replyTo);
+    if (message.payload.ok) waiter.resolve(message.payload.data);
+    else waiter.reject(new Error(message.payload.message ?? '电脑拒绝了这次操作。'));
+  }
+}
+
+/** fetch-based SSE so the device token stays in a header instead of a URL. */
+async function connect() {
+  const epoch = generation;
+  let backoff = 1000;
+  while (device && epoch === generation) {
+    // 每一轮连接换一个新信号：重连后收到的那个 hello 才是「这一轮的流建好了」。
+    const gate = streamGate();
+    streamReady = gate;
+    const controller = new AbortController();
+    streamAbort = controller;
+    let lastFrameAt = Date.now();
+    const watchdog = setInterval(() => { if (Date.now() - lastFrameAt > 45_000) controller.abort(); }, 5_000);
+    try {
+      // 告诉主机这一页能读哪种帧：换地址打开时，封装方式要跟着页面走，而不是跟着配对那一刻走。
+      const response = await fetch(`/phone/stream?deviceId=${encodeURIComponent(device.deviceId)}&transport=${encodeURIComponent(transport)}`, {
+        headers: { authorization: `Bearer ${device.token}`, accept: 'text/event-stream' },
+        signal: controller.signal,
+      });
+      if (epoch !== generation) return;
+      // 令牌被撤销、电脑换过配置或重装过：回到配对页，而不是无声地一直重试。
+      if (response.status === 401) { await revoked(); return; }
+      if (!response.ok) throw new Error(`中继返回 ${response.status}`);
+      backoff = 1000;
+      const reader = response.body.pipeThrough(new TextDecoderStream()).getReader();
+      let buffer = '';
+      for (;;) {
+        const { value, done } = await reader.read();
+        if (done) break;
+        if (epoch !== generation) return;
+        lastFrameAt = Date.now();
+        buffer += value;
+        let boundary;
+        while ((boundary = /\r?\n\r?\n/.exec(buffer))) {
+          const frame = buffer.slice(0, boundary.index);
+          buffer = buffer.slice(boundary.index + boundary[0].length);
+          let event = 'message';
+          const data = [];
+          for (const line of frame.split(/\r?\n/)) {
+            if (line.startsWith('event:')) event = line.slice(6).trim();
+            else if (line.startsWith('data:')) data.push(line.slice(5).trim());
+          }
+          // 建流之后服务端第一件事就是发 hello：从这一刻起回包才投得进来，页面的 dot 也才算真的连上。
+          if (event === 'hello') {
+            connectionError(null);
+            setDot('on');
+            gate.arrive();
+            // 断线重连回来的第一件事：把会话列表补上（待办快照服务端自己会重发）。
+            if (connectedOnce) void refreshSessions();
+            connectedOnce = true;
+          } else if (event === 'message' && data.length) await handle(JSON.parse(data.join('\n')).envelope);
+        }
+      }
+      throw new Error('连接已结束');
+    } catch (error) {
+      if (!device || epoch !== generation) return;
+      connectionError(error);
+      setDot('bad');
+      console.warn(error.message);
+      await new Promise(resolve => setTimeout(resolve, backoff));
+      backoff = Math.min(30_000, backoff * 2);
+    } finally { clearInterval(watchdog); controller.abort(); }
+  }
+}
+
+/** 凭据失效时清掉本地记录，把用户送回配对页。 */
+async function revoked() {
+  stopConnection();
+  device = null; key = null;
+  streamAbort?.abort();
+  await clearDevice().catch(() => {});
+  setDot('');
+  $('app').classList.add('hide');
+  $('pairCard').classList.remove('hide');
+  $('transportError').textContent = '这台手机已被撤销，或电脑端重新配对过。请重新扫码。';
+  $('transportError').classList.remove('hide');
+}
+
+async function begin() {
+  stopConnection();
+  const epoch = generation;
+  pendingLoaded = false; sessionsLoaded = false; sessionsReadAt = 0; pollFailures = 0;
+  sessions = [];
+  $('emptyCard').textContent = '正在读取待办…';
+  $('sessionList').textContent = '正在读取会话列表…';
+  $('dispatchBtn').disabled = true;
+  connectionError(null);
+  $('pairCard').classList.add('hide');
+  $('app').classList.remove('hide');
+  $('deviceText').textContent = device.deviceId.slice(0, 8);
+  $('deviceIdText').textContent = device.deviceId.slice(0, 8) + '…' + device.deviceId.slice(-4);
+  const derived = transport === 'plain' ? null : await deriveDeviceKey(device.secret, device.deviceId);
+  assertGeneration(epoch); key = derived;
+  $('transportText').textContent = transport === 'plain' ? '局域网明文（仅本 Wi-Fi）' : '端到端密封';
+  setDot('');
+  // 顺序必须是「先建流、等 hello、再发请求」：以前是先 invoke 再 connect，
+  // 第一个回包被投给一条还不存在的流，服务端直接丢掉，会话页就永远停在「暂无会话」。
+  if (directHttp) {
+    $('statusText').textContent = '正在连接电脑';
+    void refreshDirect(true);
+    void refreshNotifyState();
+    return;
+  }
+  void connect();
+  await waitForStream();
+  if (epoch !== generation) return;
+  try { const data = await invoke('pending.list', {}); assertGeneration(epoch); render(data); }
+  catch (error) { say(error.message); }
+  void refreshSessions();
+  void refreshNotifyState();
+}
+
+// ---------- 会话列表 ----------
+let sessions = [];
+let sessionsAttempt = 0;
+
+function renderSessions() {
+  const list = $('sessionList');
+  const select = $('dispatchSession');
+  if (!sessions.length) {
+    list.innerHTML = '<div class="empty">暂无会话，请先在电脑上新建一个</div>';
+    select.replaceChildren();
+    $('dispatchBtn').disabled = true;
+    return;
+  }
+  list.replaceChildren(...sessions.map(item => {
+    const row = document.createElement('div');
+    row.className = 'list-item';
+    row.innerHTML = `<div class="grow"><div class="t">${escapeHtml(item.title || '新对话')}</div>
+      <div class="s">${item.busy ? '进行中' : '空闲'} · ${escapeHtml((item.updatedAt || '').slice(0, 16).replace('T', ' '))}</div></div>
+      <span class="tag ${item.busy ? 'run' : ''}">${item.busy ? '运行中' : '可选'}</span>`;
+    row.onclick = () => {
+      select.value = item.sessionId;
+      $('dispatchHint').textContent = `已选中「${item.title || '新对话'}」`;
+      setTab('tasks');
+    };
+    return row;
+  }));
+  const previous = select.value;
+  select.replaceChildren(...sessions.map(item => {
+    const option = document.createElement('option');
+    option.value = item.sessionId;
+    option.textContent = `${item.busy ? '进行中 · ' : ''}${item.title || '新对话'}`;
+    return option;
+  }));
+  if (sessions.some(item => item.sessionId === previous)) select.value = previous;
+  $('dispatchBtn').disabled = false;
+}
+
+async function refreshSessions() {
+  if (directHttp) return refreshDirect(true);
+  const epoch = generation;
+  // 直连（明文）没有密钥，别再把它当成没配对，否则会话列表永远是「暂无会话」。
+  if (!ready()) return;
+  // 每次刷新领一个号：慢的那次回来时不能把快的那次结果覆盖掉。
+  const attempt = ++sessionsAttempt;
+  if (!sessions.length) $('dispatchHint').textContent = '正在读取会话列表…';
+  try {
+    const data = await invoke('sessions.list', {});
+    if (attempt !== sessionsAttempt || epoch !== generation) return;
+    sessions = Array.isArray(data?.sessions) ? data.sessions : [];
+    renderSessions();
+    $('dispatchHint').textContent = sessions.length
+      ? `共 ${data?.total ?? sessions.length} 个会话，这里显示最近 ${sessions.length} 个。`
+      : '还没有会话，请先在电脑上新建一个。';
+  } catch (error) {
+    if (attempt !== sessionsAttempt || epoch !== generation) return;
+    // 超时/失败之后按钮照样可用：再点一次「刷新」就是一次新的尝试，不是死界面。
+    $('dispatchHint').textContent = `${error.message}（可再点一次「刷新」）`;
+  }
+}
+
+async function refreshAll() {
+  if (directHttp) return refreshDirect(true);
+  if (!ready()) return;
+  const epoch = generation;
+  try { const data = await invoke('pending.list', {}); assertGeneration(epoch); render(data); }
+  catch (error) { if (epoch === generation) connectionError(error); }
+  if (epoch === generation) void refreshSessions();
+}
+
+// One self-scheduled polling loop: slow requests never overlap the next tick.
+function refreshDirect(forceSessions = false) {
+  if (!directHttp || !ready()) return Promise.resolve();
+  if (pollFlight) return pollFlight;
+  clearTimeout(pollTimer);
+  const epoch = generation;
+  const flight = (async () => {
+    try {
+      const snapshot = await invoke('pending.list', {});
+      assertGeneration(epoch);
+      render(snapshot); pendingLoaded = true;
+      if (forceSessions || Date.now() - sessionsReadAt >= 15_000) {
+        const data = await invoke('sessions.list', {});
+        assertGeneration(epoch);
+        sessions = Array.isArray(data?.sessions) ? data.sessions : [];
+        renderSessions(); sessionsLoaded = true; sessionsReadAt = Date.now();
+        $('dispatchHint').textContent = sessions.length ? `共 ${data?.total ?? sessions.length} 个会话。` : '还没有会话，请先在电脑上新建一个。';
+      }
+      pollFailures = 0; connectionError(null); setDot('on');
+    } catch (error) {
+      if (epoch !== generation) return;
+      pollFailures += 1; connectionError(error);
+      if (!pendingLoaded) $('emptyCard').textContent = '待办读取失败，请刷新重试。';
+      if (!sessionsLoaded) $('sessionList').textContent = '会话列表读取失败，请刷新重试。';
+      $('dispatchHint').textContent = error.message;
+    } finally {
+      if (epoch === generation) {
+        pollFlight = null;
+        if (ready() && !document.hidden) pollTimer = setTimeout(() => void refreshDirect(), Math.min(30_000, 3_000 * 2 ** Math.min(pollFailures, 4)));
+      }
+    }
+  })();
+  pollFlight = flight;
+  return flight;
+}
+document.addEventListener('visibilitychange', () => {
+  if (document.hidden) { clearTimeout(pollTimer); return; }
+  if (directHttp) void refreshDirect(true);
+});
+window.addEventListener('online', () => { if (directHttp) void refreshDirect(true); });
+window.addEventListener('pagehide', () => stopConnection());
+window.addEventListener('pageshow', event => { if (event.persisted && device) void begin().catch(connectionError); });
+
+// ---------- 通知 ----------
+const NOTIFY_TEXT = {
+  loading: '读取中', off: '未开启', on: '已开启',
+  denied: '被系统拒绝', unsupported: '此浏览器不支持',
+};
+const notify = { state: 'loading', registration: null };
+
+function describeNotify(state, hint = '') {
+  notify.state = state;
+  $('notifyText').textContent = NOTIFY_TEXT[state] ?? NOTIFY_TEXT.off;
+  $('notifyBtn').textContent = state === 'on' ? '关闭通知' : '开启通知';
+  $('notifyBtn').disabled = state === 'unsupported' || state === 'denied' || state === 'loading';
+  $('notifyHint').textContent = hint;
+}
+
+async function registerWorker() {
+  if (!('serviceWorker' in navigator)) { describeNotify('unsupported', '这个浏览器不支持后台通知。'); return null; }
+  try {
+    notify.registration = await navigator.serviceWorker.register('/sw.js', { scope: '/', type: 'module' });
+    return notify.registration;
+  } catch (error) {
+    describeNotify('off', `后台脚本注册失败：${error.message}`);
+    return null;
+  }
+}
+
+async function refreshNotifyState() {
+  if (!('Notification' in window) || !('PushManager' in window)) {
+    describeNotify('unsupported', 'iOS 需要先「添加到主屏幕」，系统 16.4 以上才支持。');
+    return;
+  }
+  const registration = notify.registration ?? await registerWorker();
+  if (!registration) return;
+  try {
+    const subscription = await registration.pushManager.getSubscription();
+    describeNotify(
+      subscription ? 'on' : 'off',
+      subscription ? '审批到达时会响一下，不必先打开页面。' : '开启后手机锁屏也能收到提醒。',
+    );
+  } catch (error) {
+    describeNotify('off', error.message);
+  }
+}
+
+async function enableNotifications() {
+  if (!device) return;
+  const permission = Notification.permission === 'granted' ? 'granted' : await Notification.requestPermission();
+  if (permission !== 'granted') { describeNotify('denied', '到系统设置里允许通知后再试。'); return; }
+  const registration = notify.registration ?? await registerWorker();
+  if (!registration) return;
+  try {
+    let subscription = await registration.pushManager.getSubscription();
+    if (!subscription) {
+      const response = await fetch('/push/key');
+      const key = await response.json().catch(() => ({}));
+      if (!response.ok || !key.key) throw new Error(key.error ?? '中继没有提供推送公钥。');
+      subscription = await registration.pushManager.subscribe({
+        userVisibleOnly: true,
+        applicationServerKey: fromBase64Url(key.key),
+      });
+    }
+    const saved = await fetch('/phone/subscribe', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json', authorization: `Bearer ${device.token}` },
+      body: JSON.stringify({ deviceId: device.deviceId, subscription }),
+    });
+    const body = await saved.json().catch(() => ({}));
+    if (!saved.ok) throw new Error(body.error ?? '中继拒绝了这次订阅。');
+  } catch (error) {
+    describeNotify('off', error.message);
+    return;
+  }
+  describeNotify('on', '审批到达时会响一下，不必先打开页面。');
+}
+
+async function disableNotifications() {
+  try {
+    const registration = notify.registration ?? await registerWorker();
+    const subscription = await registration?.pushManager.getSubscription();
+    await subscription?.unsubscribe();
+    if (device) {
+      await fetch('/phone/unsubscribe', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json', authorization: `Bearer ${device.token}` },
+        body: JSON.stringify({ deviceId: device.deviceId }),
+      });
+    }
+  } catch (error) {
+    say(`关闭通知失败：${error.message}`);
+  }
+  describeNotify('off');
+}
+
+if ('serviceWorker' in navigator) {
+  navigator.serviceWorker.addEventListener('message', event => {
+    const msgType = event.data?.type;
+    if (msgType === 'push-subscription-refresh' || msgType === 'push-subscription-lost') {
+      if (device && typeof Notification !== 'undefined' && Notification.permission === 'granted') {
+        void enableNotifications();
+      } else {
+        void refreshNotifyState();
+      }
+    } else if (msgType === 'push-subscription-updated') {
+      void refreshNotifyState();
+    }
+  });
+}
+
+// ---------- 事件绑定 ----------
+$('pairBtn').onclick = () => void pair();
+$('refreshBtn').onclick = () => { void refreshAll(); };
+$('refreshDataBtn').onclick = () => { void refreshAll(); };
+$('notifyBtn').onclick = async () => {
+  if (notify.state === 'on') await disableNotifications();
+  else await enableNotifications();
+};
+$('dispatchBtn').onclick = async () => {
+  const text = $('dispatchText').value.trim();
+  $('dispatchError').classList.add('hide');
+  if (!text) return;
+  $('dispatchBtn').disabled = true;
+  try {
+    const sessionId = $('dispatchSession').value;
+    if (!sessionId) throw new Error('请选择一个会话。');
+    await invoke('task.dispatch', { sessionId, text, mode: $('dispatchMode').value });
+    $('dispatchText').value = '';
+    toast('已派发');
+    void refreshSessions();
+  } catch (error) {
+    $('dispatchError').textContent = error.message;
+    $('dispatchError').classList.remove('hide');
+  } finally {
+    $('dispatchBtn').disabled = false;
+  }
+};
+$('forgetBtn').onclick = async () => {
+  stopConnection();
+  await clearDevice().catch(() => {});
+  await disableNotifications();
+  device = null; key = null; streamAbort?.abort(); location.reload();
+};
+
+/** 扫码链接把配对码放在片段里；片段不会发送到服务器，配对后立刻从地址栏抹掉。 */
+function codeFromHash() {
+  const match = /(?:^|[#&])c=([A-Za-z0-9_-]{32,128})/.exec(location.hash ?? '');
+  if (match) return match[1];
+  const query = new URLSearchParams(location.search ?? '').get('c');
+  return query && /^[A-Za-z0-9_-]{32,128}$/.test(query) ? query : '';
+}
+
+transport = await detectTransport();
+if (!transport) {
+  // 协商失败，或没有 WebCrypto 且主机未允许明文：显示原因，禁止配对及连接。
+  $('transportError').textContent = negotiationError || '这个地址不是安全上下文（http），浏览器不提供加密接口。请用电脑给出的 https 地址打开（开启 Cloudflare 隧道就会有一个），或换到同一 Wi-Fi 下的直连地址。';
+  $('transportError').classList.remove('hide');
+  $('pairBtn').disabled = true;
+  $('privacyNote').textContent = negotiationError ? '直连协商未完成，已停止配对和连接。' : '当前页面无法加密传输，已停止配对。';
+  setDot('');
+} else {
+  if (transport === 'plain') {
+    $('privacyNote').textContent = '当前是局域网明文直连：没有 WebCrypto 就没有端到端加密，只在你信得过的 Wi-Fi 里使用。';
+    $('footerNote').textContent = '局域网明文：同一网络里能抓包的人可能拿到令牌';
+  }
+  try {
+    device = await load();
+    bootReady = true;
+    $('pairBtn').disabled = false;
+    if (device) {
+      await begin();
+    } else {
+      const scanned = codeFromHash();
+      if (scanned) {
+        $('pairCode').value = scanned;
+        history.replaceState(null, '', location.pathname);
+        await pair();
+      }
+    }
+  } catch (error) {
+    connectionError(error);
+    $('pairError').textContent = error?.message ?? '初始化失败，请刷新页面。';
+    $('pairError').classList.remove('hide');
+  }
+}
+</script>
+</body>
+</html>

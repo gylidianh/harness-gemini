@@ -1,4 +1,4 @@
-﻿import { randomUUID } from 'node:crypto';
+import { randomUUID } from 'node:crypto';
 import { abortError, checkAbort, isObject, safeError } from './util.mjs';
 import { REASONING_BODY_FIELDS, reasoningRequestVariants } from '../shared/reasoning-effort.mjs';
 // Node's fetch applies a hidden 300s body watchdog of its own, which killed a thinking model's
@@ -74,20 +74,22 @@ export function protocolOf(settings) {
   return PROTOCOLS.has(settings?.protocol) ? settings.protocol : 'chat';
 }
 
+const VERSIONED_API_ROOT = /\/v\d+(?:beta\d*)?$/i;
+
 /**
  * The endpoint one protocol lives at. The configured address is the API root
- * (usually ending in /v1), matching how Chat Completions was already addressed.
+ * (usually ending in /v1, /v3, /v4 or /v1beta), matching how Chat Completions was already addressed.
  */
 export function endpointFor(baseUrl, protocol = 'chat') {
   const base = String(baseUrl || '').replace(/\/+$/, '');
-  if (protocol === 'anthropic') return /\/v1$/.test(base) ? `${base}/messages` : `${base}/v1/messages`;
-  if (protocol === 'responses') return /\/v1$/.test(base) ? `${base}/responses` : `${base}/v1/responses`;
+  if (protocol === 'anthropic') return VERSIONED_API_ROOT.test(base) ? `${base}/messages` : `${base}/v1/messages`;
+  if (protocol === 'responses') return VERSIONED_API_ROOT.test(base) ? `${base}/responses` : `${base}/v1/responses`;
   return `${base}/chat/completions`;
 }
 
 function modelsEndpoint(baseUrl, protocol) {
   const base = String(baseUrl || '').replace(/\/+$/, '');
-  if (protocol !== 'chat' && !/\/v1$/.test(base)) return `${base}/v1/models`;
+  if (protocol !== 'chat' && !VERSIONED_API_ROOT.test(base)) return `${base}/v1/models`;
   return `${base}/models`;
 }
 

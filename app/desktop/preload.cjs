@@ -674,6 +674,17 @@ ipcRenderer.on(BROWSER_DOWNLOADS_CHANNEL, (_event, payload) => {
 
 installDownloadUi();
 
+const REMOTE_CHANNEL = 'harness:remote';
+
+/** Every remote-connection action answers { ok, data | error } and never throws into the page. */
+function remoteCommand(action, payload) {
+  return ipcRenderer.invoke(REMOTE_CHANNEL, action, payload ?? null).then(reply => {
+    if (!reply || typeof reply !== 'object') return Object.freeze({ ok: false, error: '远程设置暂时不可用。' });
+    if (reply.ok !== true) return Object.freeze({ ok: false, error: String(reply.error ?? '远程设置暂时不可用。').slice(0, 300) });
+    return Object.freeze({ ok: true, data: jsonCopy(reply.data) });
+  }, () => Object.freeze({ ok: false, error: '远程设置暂时不可用。' }));
+}
+
 contextBridge.exposeInMainWorld('harnessDesktop', Object.freeze({
   browser: Object.freeze({
     getState: () => browserCommand('getState'),
@@ -762,6 +773,27 @@ contextBridge.exposeInMainWorld('harnessDesktop', Object.freeze({
       if (lastBrowserState) { try { callback(lastBrowserState); } catch { /* A UI callback must not break the bridge. */ } }
       return () => browserSubscribers.delete(callback);
     },
+  }),
+  remote: Object.freeze({
+    status: () => remoteCommand('status'),
+    // The pairing link carries the secret, so it is fetched only when the user asks to see it.
+    pairLink: () => remoteCommand('pairLink'),
+    enable: input => remoteCommand('enable', {
+      // 'direct' is the no-VPS mode; an old caller that only sends a url still means relay.
+      mode: input?.mode === 'relay' || input?.mode === 'direct' ? input.mode : undefined,
+      url: String(input?.url ?? '').slice(0, 2_048),
+      relayToken: String(input?.relayToken ?? '').slice(0, 512),
+      port: Number.isInteger(input?.port) ? input.port : undefined,
+    }),
+    disable: () => remoteCommand('disable'),
+    revoke: deviceId => remoteCommand('revoke', { deviceId: String((deviceId && typeof deviceId === 'object' ? deviceId.deviceId : deviceId) ?? '').slice(0, 64) }),
+    setDispatch: value => remoteCommand('setDispatch', { enabled: (value && typeof value === 'object' ? value.enabled : value) === true }),
+    setPlainLan: value => remoteCommand('setPlainLan', { enabled: (value && typeof value === 'object' ? value.enabled : value) === true }),
+    // The tunnel turns a LAN-only link into a public https address; both calls need the user's
+    // click, and neither runs at startup unless it was already switched on.
+    setTunnel: value => remoteCommand('setTunnel', { enabled: (value && typeof value === 'object' ? value.enabled : value) === true }),
+    installTunnel: () => remoteCommand('installTunnel'),
+    rotateSecret: () => remoteCommand('rotateSecret'),
   }),
   completionNotifications: true,
   copyImage: url => ipcRenderer.invoke(COPY_IMAGE_CHANNEL, typeof url === 'string' ? url : '').then(payload => {

@@ -1,6 +1,6 @@
 # 源码与开发
 
-对应 Harness Gemini 1.6.8。返回 [项目首页](../README.md)。
+对应 Harness Gemini 2.0.2。返回 [项目首页](../README.md)。
 
 ## 包含哪些内容
 
@@ -16,9 +16,9 @@ tools/           开发启动、校验与打包工具
 tests/           使用独立临时数据的服务测试
 ```
 
-应用文件与已发布的 1.6.8 程序归档一致。`SOURCE-MANIFEST.json` 保存原始文件的 SHA-256，不包含本机路径；依赖通过锁文件安装，`node_modules` 不入库。
+应用文件与已发布的 2.0.2 程序归档一致。`SOURCE-MANIFEST.json` 保存原始文件的 SHA-256，不包含本机路径；依赖通过锁文件安装，`node_modules` 不入库。
 
-基础界面的原始 React / Vite 工程没有找到，本仓库只保留其编译产物。`dist/composer-controls.js`、`settings-layout.js`、`skills-ui.js`、`model-selector.js` 等新增 UI 模块是可读源文件。可以修改这些模块、桌面端和服务端，再随现有前端产物打包；不能从此仓库重新生成基础界面的 `dist/assets/index-*.js`。
+前端源码在 `app/ui/`：从仓库根目录执行 `npm run build:ui --prefix app` 生成 `app/dist/`。
 
 ## 获取源码
 
@@ -29,7 +29,7 @@ git clone https://github.com/gylidianh/harness-gemini.git
 cd harness-gemini
 ```
 
-`v1.3.10` 标签在源码上传前已发布，保持原样；已发布的 `v1.4.4` 和本次 `v1.6.8` 标签都指向对应源码。
+`v1.3.10` 标签在源码上传前已发布，保持原样；已发布的 `v1.4.4` 和本次 `v2.0.2` 标签都指向对应源码。
 
 ## 环境与安装
 
@@ -68,7 +68,7 @@ npm start
 
 ## 检查与测试
 
-1.6.8 原构建已完成 JPEG、UI、文件改动、已有回归和隔离桌面自检。公开源码另包含使用独立临时数据的服务测试与 JPEG 结构回归测试；发布核验范围见版本说明。
+手机回复草稿和团队模型配置的回归测试位于 `tests/remote-question-draft.cjs` 与 `tests/remote-team-configuration.mjs`。
 
 ```powershell
 npm run check
@@ -77,7 +77,7 @@ npm test
 ```
 
 - `check` 检查源码中的本机路径、疑似凭据、意外数据文件和 JavaScript 语法。
-- `verify:release` 比对应用文件与已发布 1.6.8 归档的校验值。代码修改后出现差异是预期结果。
+- `verify:release` 比对应用文件与已发布 2.0.2 归档的校验值。代码修改后出现差异是预期结果。
 - `test` 启动独立临时服务，验证版本、界面资源、配置掩码和会话创建，不请求外部模型。
 
 可在 Windows 上运行 `npm run smoke:desktop` 做桌面集成自检。结果保存在独立 `.local-data/smoke-*/report.json`。桌宠置顶等检查受桌面环境影响；应查看具体检查结果，不能把部分通过当作全部通过。
@@ -96,4 +96,4 @@ npm run build:win
 
 不提交配置、密钥、会话、日志、工作文件、依赖目录或本机开发脚本。截图只能使用演示数据。自动扫描不能代替提交前审阅。
 
-保留 `app/THIRD-PARTY-NOTICES.md`、`app/third-party/` 及 `app/dist/provider-brands/` 中的许可与来源说明。项目自身的代码许可尚未另行声明，不为第三方代码或商标新增授权。
+保留 `app/THIRD-PARTY-NOTICES.md`、`app/third-party/` 及 `app/dist/provider-brands/` 中的许可与来源说明。项目代码采用 MIT 许可（见根目录 LICENSE），不为第三方代码或商标新增授权。

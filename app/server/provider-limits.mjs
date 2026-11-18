@@ -30,7 +30,7 @@ const WINDOW_MS = 60_000;
 function laneFor(key) {
   let lane = lanes.get(key);
   if (!lane) {
-    lane = { active: 0, waiters: [], stamps: [] };
+    lane = { active: 0, limit: 0, waiters: [], stamps: [] };
     lanes.set(key, lane);
   }
   return lane;
@@ -48,6 +48,25 @@ function active(limit) {
   return Number.isSafeInteger(value) && value > 0 ? value : 0;
 }
 
+/** Dynamic concurrency ceiling on a lane: <= 0 or Infinity means unlimited. */
+function effectiveLimit(lane) {
+  if (lane.limit === Infinity) return Infinity;
+  return Number.isSafeInteger(lane.limit) && lane.limit > 0 ? lane.limit : Infinity;
+}
+
+function pruneStamps(lane, now = Date.now()) {
+  while (lane.stamps.length && now - lane.stamps[0] >= WINDOW_MS) lane.stamps.shift();
+}
+
+/** Reclaim an idle lane once no concurrency slots, waiters or recent RPM timestamps remain. */
+function pruneLane(key, lane) {
+  if (!key || !lane) return;
+  pruneStamps(lane);
+  if (lane.active === 0 && lane.waiters.length === 0 && lane.stamps.length === 0) {
+    if (lanes.get(key) === lane) lanes.delete(key);
+  }
+}
+
 function sleep(ms, signal) {
   return new Promise((resolve, reject) => {
     if (signal?.aborted) { reject(abortError()); return; }
@@ -61,40 +80,66 @@ function sleep(ms, signal) {
   });
 }
 
-/** The next waiter is let out whenever a slot comes free. */
-function drain(lane, limit) {
-  while (lane.waiters.length && lane.active < limit) {
+/** Wake all queued waiters permitted by the lane's current dynamic limit. */
+function drain(lane) {
+  const cap = effectiveLimit(lane);
+  while (lane.waiters.length && lane.active < cap) {
     const waiter = lane.waiters.shift();
     waiter.release();
   }
 }
 
+/** Update an existing lane's concurrency limit immediately and wake eligible waiters. */
+export function updateConcurrencyLimit(settings) {
+  const key = laneKey(settings);
+  if (!key) return;
+  const existing = lanes.get(key);
+  if (!existing) return;
+  existing.limit = active(settings?.maxConcurrency);
+  drain(existing);
+  pruneLane(key, existing);
+}
+
 /**
  * Waits for one of the connection's slots and returns the function that gives it back. A
- * connection with no limit answers at once with a function that does nothing.
+ * connection with no limit answers at once with a function that does nothing, after waking
+ * any requests that were queued under an earlier limit.
  */
 export async function acquireConcurrency(settings, signal) {
+  if (signal?.aborted) throw abortError();
   const key = laneKey(settings);
   const limit = active(settings?.maxConcurrency);
-  if (!key || !limit) return () => {};
+  if (!key) return () => {};
+  if (!limit) {
+    const existing = lanes.get(key);
+    if (existing) {
+      existing.limit = 0;
+      drain(existing);
+      pruneLane(key, existing);
+    }
+    return () => {};
+  }
   const lane = laneFor(key);
-  if (!lane.waiters.length && lane.active < limit) {
+  lane.limit = limit;
+  drain(lane);
+  if (!lane.waiters.length && lane.active < effectiveLimit(lane)) {
     lane.active += 1;
-    return releaser(lane, limit);
+    return releaser(key, lane);
   }
   if (lane.waiters.length >= MAX_WAITERS) throw new Error('这个连接的并发队列已排满，请稍后再试，或在连接设置中调高并发上限。');
   return new Promise((resolve, reject) => {
-    if (signal?.aborted) { reject(abortError()); return; }
+    if (signal?.aborted) { pruneLane(key, lane); reject(abortError()); return; }
     const waiter = {
       release: () => {
         signal?.removeEventListener('abort', onAbort);
         lane.active += 1;
-        resolve(releaser(lane, limit));
+        resolve(releaser(key, lane));
       },
     };
     const onAbort = () => {
       const at = lane.waiters.indexOf(waiter);
       if (at !== -1) lane.waiters.splice(at, 1);
+      pruneLane(key, lane);
       reject(abortError());
     };
     signal?.addEventListener('abort', onAbort, { once: true });
@@ -102,14 +147,15 @@ export async function acquireConcurrency(settings, signal) {
   });
 }
 
-/** Gives a slot back once, and lets the next waiting request in. */
-function releaser(lane, limit) {
+/** Gives a slot back once, and lets waiting requests in according to the current lane.limit. */
+function releaser(key, lane) {
   let given = false;
   return () => {
     if (given) return;
     given = true;
     lane.active = Math.max(0, lane.active - 1);
-    drain(lane, limit);
+    drain(lane);
+    pruneLane(key, lane);
   };
 }
 
@@ -121,12 +167,18 @@ function releaser(lane, limit) {
 export async function takeRate(settings, signal) {
   const key = laneKey(settings);
   const limit = active(settings?.maxRpm);
-  if (!key || !limit) return;
+  if (!key || !limit) {
+    if (key) {
+      const existing = lanes.get(key);
+      if (existing) pruneLane(key, existing);
+    }
+    return;
+  }
   const lane = laneFor(key);
   for (;;) {
     if (signal?.aborted) throw abortError();
     const now = Date.now();
-    while (lane.stamps.length && now - lane.stamps[0] >= WINDOW_MS) lane.stamps.shift();
+    pruneStamps(lane, now);
     if (lane.stamps.length < limit) {
       lane.stamps.push(now);
       return;

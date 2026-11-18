@@ -1,0 +1,80 @@
+/* ==========================================================================
+   Conversation Branch / Fork UI (branch-ui.css)
+   Per-message fork action button & branched-from lineage pill badge.
+   ========================================================================== */
+
+.hg-branch-btn {
+  position: relative;
+  box-shadow: none;
+}
+
+.hg-branch-btn.is-busy {
+  cursor: progress;
+  opacity: 0.75;
+}
+
+.hg-branch-btn.is-busy svg {
+  animation: hg-branch-pulse 0.9s ease-in-out infinite;
+}
+
+@keyframes hg-branch-pulse {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.35;
+  }
+}
+
+/* Lineage pill shared by sidebar session rows and chat header */
+.hg-branch-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  padding: 0 6px;
+  height: 17px;
+  border-radius: 999px;
+  border: 1px solid var(--line);
+  background: var(--surface-sunken, transparent);
+  box-shadow: none;
+  color: var(--muted, inherit);
+  font-size: 10.5px;
+  font-weight: 500;
+  line-height: 1;
+  white-space: nowrap;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  transition: color 0.14s ease, border-color 0.14s ease, background-color 0.14s ease;
+}
+
+.hg-branch-badge span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.hg-branch-badge svg {
+  flex: none;
+  opacity: 0.8;
+}
+
+button.hg-branch-badge {
+  cursor: pointer;
+}
+
+button.hg-branch-badge:hover {
+  color: var(--text);
+  border-color: var(--accent, var(--line-strong, var(--line)));
+  background: var(--hover, transparent);
+}
+
+button.hg-branch-badge:hover svg {
+  opacity: 1;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .hg-branch-btn.is-busy svg {
+    animation: none;
+  }
+}

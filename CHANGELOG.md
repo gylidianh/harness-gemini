@@ -1,5 +1,12 @@
 # 更新记录
 
+## 2.0.2 更新
+
+- 手机待办刷新时保留自定义回复、焦点和光标，提交失败后可重试。
+- 手机端支持为每位 Team 成员选择连接和模型，或继承默认值。
+- 使用自建 VPS 中继时，请同时更新 `relay-server/phone.html`；直连用户更新桌面端后刷新手机页面即可。
+
+
 ## 1.6.8
 
 [版本说明与下载](https://github.com/gylidianh/harness-gemini/releases/tag/v1.6.8)

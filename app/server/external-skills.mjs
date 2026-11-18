@@ -1,3 +1,4 @@
+import { MAX_MCP_ARGS_CHARS, normalizeMcpConfig, runMcpSkill } from './mcp-client.mjs';
 import { spawn } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import { promises as fs } from 'node:fs';
@@ -172,7 +173,13 @@ export function normalizeManifest(raw, folder) {
   const description = typeof raw.description === 'string' ? raw.description.trim() : '';
   if (!description) return manifestError(folder, 'description 不能为空：模型靠它判断什么时候调用。');
   if (description.length > MAX_DESCRIPTION) return manifestError(folder, `description 不能超过 ${MAX_DESCRIPTION} 个字符。`);
-  let command = raw.command;
+  let mcp;
+  if (raw.transport !== undefined && !['mcp', 'script'].includes(raw.transport)) return manifestError(folder, 'transport 必须是 mcp 或 script。');
+  if (raw.transport === 'mcp') {
+    try { mcp = normalizeMcpConfig(raw.mcp); }
+    catch (error) { return manifestError(folder, error.message); }
+  }
+  let command = mcp ? ['[native-mcp]'] : raw.command;
   if (typeof command === 'string') command = [command];
   if (!Array.isArray(command) || !command.length || command.length > 32
     || command.some(token => typeof token !== 'string' || !token || token.length > 1_024 || token.includes('\0'))) {
@@ -201,7 +208,8 @@ export function normalizeManifest(raw, folder) {
   return {
     skill: {
       name, description, command, parameters, originalParameters, timeoutMs, pathParameters,
-      readOnly: raw.readOnly === true,
+      ...(mcp ? { transport: 'mcp', mcp } : {}),
+      readOnly: mcp ? mcp.readOnly : raw.readOnly === true,
       manifestEnabled: raw.enabled !== false,
       folder,
     },
@@ -416,7 +424,7 @@ function validateExternalSchema(skill, args) {
   requireObject(args);
   // Count and bound the actual JSON tree before recursion. Also rejects cyclic / non-JSON callers
   // with a controlled 400, rather than letting JSON.stringify throw or a counting loop run forever.
-  const { nodes, keyCounts } = jsonNodeCount(args);
+  const { nodes, keyCounts } = jsonNodeCount(args, skill.transport === 'mcp' ? MAX_MCP_ARGS_CHARS : MAX_ARGS_CHARS);
   const parameters = skill.originalParameters ?? skill.parameters;
   const context = {
     root: parameters, budget: { left: SCHEMA_VISIT_BUDGET + 32 * nodes },
@@ -436,19 +444,19 @@ function validateExternalSchema(skill, args) {
 }
 
 /** Bounded iterative JSON preflight. Count every occurrence (not just distinct JS identities). */
-function jsonNodeCount(value) {
+function jsonNodeCount(value, maxChars = MAX_ARGS_CHARS) {
   let count = 0;
   let chars = 0;
   const keyCounts = new WeakMap();
   const active = new WeakSet();
   const stack = [{ value, depth: 0 }];
-  const tooLarge = () => { throw new HttpError(400, `外置技能参数不能超过 ${MAX_ARGS_CHARS} 个字符。`); };
+  const tooLarge = () => { throw new HttpError(400, `外置技能参数不能超过 ${maxChars} 个字符。`); };
   while (stack.length) {
     const frame = stack.pop();
     const item = frame.value;
     if (frame.exit) { active.delete(item); continue; }
     if (frame.depth > MAX_VALIDATION_DEPTH) throw new HttpError(400, '外置技能参数嵌套层级过深，无法校验。');
-    if (++count > MAX_ARGS_CHARS) tooLarge();
+    if (++count > maxChars) tooLarge();
     if (item !== null && typeof item === 'object') {
       if (active.has(item)) throw new HttpError(400, '外置技能参数不能含有循环引用。');
       const array = Array.isArray(item);
@@ -456,12 +464,12 @@ function jsonNodeCount(value) {
       const keys = array ? null : Object.keys(item);
       const length = array ? item.length : keys.length;
       if (keys) keyCounts.set(item, keys.length);
-      if (length > MAX_ARGS_CHARS) tooLarge();
+      if (length > maxChars) tooLarge();
       chars += 2 + Math.max(0, length - 1); // brackets/braces and commas
       if (keys) for (const key of keys) {
-        if (key.length > MAX_ARGS_CHARS) tooLarge();
+        if (key.length > maxChars) tooLarge();
         chars += JSON.stringify(key).length + 1; // key and colon
-        if (chars > MAX_ARGS_CHARS) tooLarge();
+        if (chars > maxChars) tooLarge();
       }
       active.add(item);
       stack.push({ value: item, exit: true });
@@ -469,10 +477,10 @@ function jsonNodeCount(value) {
     } else {
       const type = typeof item;
       if (item !== null && type !== 'string' && type !== 'boolean' && (type !== 'number' || !Number.isFinite(item))) throw new HttpError(400, '外置技能参数必须是有效 JSON 数据。');
-      if (type === 'string' && item.length > MAX_ARGS_CHARS) tooLarge();
+      if (type === 'string' && item.length > maxChars) tooLarge();
       chars += JSON.stringify(item).length;
     }
-    if (chars > MAX_ARGS_CHARS) tooLarge();
+    if (chars > maxChars) tooLarge();
   }
   return { nodes: count, keyCounts };
 }
@@ -695,7 +703,10 @@ function schemaNodeProblem(schema, value, location, context, depth) {
  */
 export async function externalPathTargets(skill, args, workspace) {
   const values = new Set();
-  for (const key of skill.pathParameters) if (typeof args[key] === 'string' && args[key]) values.add(args[key]);
+  for (const key of skill.pathParameters) {
+    const items = skill.transport === 'mcp' && Array.isArray(args[key]) ? args[key] : [args[key]];
+    for (const value of items) if (typeof value === 'string' && value) values.add(value);
+  }
   for (const value of Object.values(args)) if (typeof value === 'string' && value.length < 4_096 && path.isAbsolute(value)) values.add(value);
   const targets = [];
   for (const value of values) {
@@ -743,6 +754,7 @@ export async function resolveCommand(skill, workspace) {
 /** Run one call to completion and describe what it printed. */
 export async function runExternalSkill(skill, args, { workspace, signal, terminate }) {
   checkAbort(signal);
+  if (skill.transport === 'mcp') return runMcpSkill(skill, args, { workspace, signal });
   const root = await fs.realpath(workspace);
   const { executable, args: argv, env } = await resolveCommand(skill, root);
   // 1.3.4: a stop that arrived during the two awaits above fired its abort event before any

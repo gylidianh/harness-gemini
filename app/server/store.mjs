@@ -7,11 +7,106 @@ import { identityCodec, isSealedSecret } from './secret.mjs';
 import { isReasoningLevel, storedReasoningLevel } from '../shared/reasoning-effort.mjs';
 // 1.4.8: a connection's advanced options are validated here, where they are saved.
 import { MAX_CONCURRENCY, MAX_RPM, PROXY_MODES, normalizeExtraBodyText, normalizeHeaders, normalizeLimit, normalizeProxyMode, normalizeProxyUrl } from './provider-extra.mjs';
+import { updateConcurrencyLimit } from './provider-limits.mjs';
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const CORRUPT_SESSION_TEXT = '这个会话文件已损坏，无法打开；可以在侧边栏直接将它删除。';
 const ARTIFACT_FILE_RE = /^[a-f0-9]{36}\.(?:png|jpg|webp|gif)$/i;
 const ARTIFACT_URL_GLOBAL_RE = /\/api\/artifacts\/([a-f0-9]{36}\.(?:png|jpg|webp|gif))/gi;
+// 1.7.4: 分叉（fork）。ZCode 的 session fork 只搬运"看得见的历史"：分叉点之后的内容不进入
+// 子对话，子对话不继承父对话的排队请求、等待中的提问与审批，也不自动发起新一轮模型调用。
+// ZCode is Copyright 2026 Z.AI Co., Ltd, Apache License 2.0, see THIRD-PARTY-NOTICES.md.
+/** 附件引用只是一个文件名：不带目录分隔符，也不会带 NUL。 */
+function isForkAttachmentRef(value) {
+  return typeof value === 'string' && value.length > 0 && value.length <= 200
+    && !value.includes('/') && !value.includes('\\') && !value.includes('\u0000');
+}
+
+/** 子对话标题：默认写明来源，用户自己起的标题优先，两者都限制在侧边栏放得下的长度。 */
+function forkTitle(requested, parentTitle) {
+  const text = typeof requested === 'string' && requested.trim() ? requested.trim() : `分叉自「${parentTitle}」`;
+  return text.length > 120 ? `${text.slice(0, 119)}…` : text;
+}
+
+/** 只把认识的字段交出去，记录里多余的键不会渗到界面。 */
+function publicBranch(record) {
+  if (!isObject(record)) return null;
+  const parentSessionId = typeof record.parentSessionId === 'string' ? record.parentSessionId : '';
+  if (!parentSessionId) return null;
+  return {
+    parentSessionId,
+    parentTitle: typeof record.parentTitle === 'string' ? record.parentTitle : '',
+    messageId: typeof record.messageId === 'string' ? record.messageId : null,
+    messageIndex: Number.isInteger(record.messageIndex) ? record.messageIndex : null,
+    at: typeof record.at === 'string' ? record.at : null,
+  };
+}
+
+function sealForkedSteps(steps) {
+  for (const step of Array.isArray(steps) ? steps : []) {
+    if (!isObject(step)) continue;
+    if (['running', 'pending'].includes(step.status)) {
+      step.status = 'cancelled';
+      if (!step.output) step.output = '此步骤在分叉点之前未完成，已在子对话中结束。';
+    }
+  }
+}
+
+function sealForkedToolItem(tool) {
+  if (!isObject(tool)) return;
+  if (['running', 'pending'].includes(tool.status)) {
+    tool.status = 'cancelled';
+    if (!tool.output) tool.output = '这次工具调用在分叉点之前未完成，子对话不继承运行中的工具。';
+  }
+  if (isObject(tool.subagent)) {
+    if (['running', 'pending'].includes(tool.subagent.status)) tool.subagent.status = 'cancelled';
+    sealForkedSteps(tool.subagent.steps);
+  }
+  sealForkedSteps(tool.steps);
+  if (isObject(tool.team)) {
+    if (['running', 'pending'].includes(tool.team.status)) tool.team.status = 'cancelled';
+    for (const member of Array.isArray(tool.team.members) ? tool.team.members : []) {
+      if (!isObject(member)) continue;
+      if (['running', 'pending'].includes(member.status)) member.status = 'cancelled';
+      if (member.wakePending) member.wakePending = false;
+    }
+    for (const task of Array.isArray(tool.team.tasks) ? tool.team.tasks : []) {
+      if (isObject(task) && ['running', 'in_progress', 'pending'].includes(task.status)) task.status = 'failed';
+    }
+    for (const approval of Array.isArray(tool.team.approvals) ? tool.team.approvals : []) {
+      if (isObject(approval) && approval.status === 'pending') approval.status = 'denied';
+    }
+  }
+}
+
+/** 一条被复制的消息：新 id、记下父消息 id，等待中的提问及残留运行中的工具/步骤改为已中断。 */
+function forkMessageCopy(message, idMap) {
+  const copy = structuredClone(message);
+  const originId = typeof message?.id === 'string' && message.id ? message.id : null;
+  copy.id = randomUUID();
+  if (originId) { copy.originId = originId; idMap.set(originId, copy.id); }
+  if (['running', 'pending', 'streaming'].includes(copy.status)) {
+    copy.status = 'cancelled';
+    if (isObject(copy.metrics) && ['running', 'pending', 'streaming'].includes(copy.metrics.status)) {
+      copy.metrics = { ...copy.metrics, status: 'cancelled' };
+    }
+  }
+  // 分叉点之前没人回答的提问，在子对话里是"中断"，不能看起来还在等用户。
+  for (const question of Array.isArray(copy.questions) ? copy.questions : []) {
+    if (question?.status !== 'pending') continue;
+    question.status = 'cancelled';
+    question.reason = 'forked';
+    question.error = '这次提问在分叉点之前，子对话不继承等待中的提问。';
+  }
+  // 分叉点之前残留的 running / pending 工具卡片与步骤状态统一封口为 cancelled。
+  for (const tool of Array.isArray(copy.tools) ? copy.tools : []) sealForkedToolItem(tool);
+  for (const call of Array.isArray(copy.toolCalls) ? copy.toolCalls : []) sealForkedToolItem(call);
+  sealForkedSteps(copy.steps);
+  for (const compaction of Array.isArray(copy.compactions) ? copy.compactions : []) {
+    if (isObject(compaction) && ['running', 'pending'].includes(compaction.status)) compaction.status = 'cancelled';
+  }
+  return copy;
+}
 
 function extractArtifactNamesFromSession(session) {
   const out = new Set();
@@ -120,6 +215,7 @@ function persistedSettings(settings) {
     completionSound: settings.completionSound, completionNotification: settings.completionNotification,
     autoCompact: settings.autoCompact,
     fileChangesEnabled: settings.fileChangesEnabled ?? true,
+    computerUseEnabled: settings.computerUseEnabled === true,
     globalProxyUrl: settings.globalProxyUrl ?? '',
     skin: settings.skin ?? 'classic',
   };
@@ -218,6 +314,7 @@ export function publicSettings(settings) {
     completionSound: settings.completionSound ?? true, completionNotification: settings.completionNotification ?? true,
     autoCompact: settings.autoCompact ?? true,
     fileChangesEnabled: settings.fileChangesEnabled ?? true,
+    computerUseEnabled: settings.computerUseEnabled === true,
     globalProxyUrl: settings.globalProxyUrl ?? '',
     skin: SKINS.has(settings.skin) ? settings.skin : 'classic',
   };
@@ -232,6 +329,9 @@ export function resolveConnectionSettings(settings, requestedProfileId) {
     ...connectionFields(selected), workspace: settings.workspace, maxToolRounds: settings.maxToolRounds,
     approvalMode: settings.approvalMode ?? 'ask', autoCompact: settings.autoCompact ?? true,
     fileChangesEnabled: settings.fileChangesEnabled ?? true,
+    // Desktop control belongs to this machine, not to a connection. Every run reads it from the
+    // same snapshot, so a later settings change cannot widen what a live run may do.
+    computerUseEnabled: settings.computerUseEnabled === true,
     // 1.4.8: the app-wide proxy a connection follows when it has none of its own.
     globalProxyUrl: settings.globalProxyUrl ?? '',
     profileId: selected.id, profileName: selected.name, activeProfileId: selected.id,
@@ -271,7 +371,7 @@ export class Store {
     this.unreadableKeys = new Map();
     await Promise.all([this.dataDir, this.sessionDir, this.deletedDir, this.artifactDir, this.defaultWorkspace].map(directory => fs.mkdir(directory, { recursive: true, mode: 0o700 })));
     const defaultProfile = { id: randomUUID(), name: '默认连接', protocol: 'chat', baseUrl: '', chatModel: '', agentModel: '', imageModel: '', contextWindow: DEFAULT_CONTEXT_WINDOW, reasoningEffort: '', headers: [], extraBody: '', proxyMode: 'global', proxyUrl: '', maxConcurrency: 0, maxRpm: 0, apiKey: '' };
-    const initial = activateProfile({ profiles: [defaultProfile], activeProfileId: defaultProfile.id, workspace: this.defaultWorkspace, maxToolRounds: 0, approvalMode: 'ask', completionSound: true, completionNotification: true, autoCompact: true, fileChangesEnabled: true, globalProxyUrl: '' });
+    const initial = activateProfile({ profiles: [defaultProfile], activeProfileId: defaultProfile.id, workspace: this.defaultWorkspace, maxToolRounds: 0, approvalMode: 'ask', completionSound: true, completionNotification: true, autoCompact: true, fileChangesEnabled: true, computerUseEnabled: false, globalProxyUrl: '' });
     const { saved, recovered } = await this.loadSavedSettings();
     // 1.3.3: the stored (sealed) form is never validated as if it were the key itself. A sealed key
     // is longer than the key, so a key saved near the length limit used to stop the next start-up.
@@ -538,6 +638,7 @@ export class Store {
       completionSound: previous.completionSound ?? true, completionNotification: previous.completionNotification ?? true,
       autoCompact: previous.autoCompact ?? true,
       fileChangesEnabled: previous.fileChangesEnabled ?? true,
+      computerUseEnabled: previous.computerUseEnabled === true,
       globalProxyUrl: previous.globalProxyUrl ?? '',
       skin: SKINS.has(previous.skin) ? previous.skin : 'classic',
     };
@@ -594,6 +695,10 @@ export class Store {
       if (typeof update.fileChanges !== 'boolean') throw new HttpError(400, 'fileChanges 必须是布尔值。');
       next.fileChangesEnabled = update.fileChanges;
     }
+    if ('computerUseEnabled' in update) {
+      if (typeof update.computerUseEnabled !== 'boolean') throw new HttpError(400, 'computerUseEnabled 必须是布尔值。');
+      next.computerUseEnabled = update.computerUseEnabled;
+    }
     if ('globalProxyUrl' in update) {
       next.globalProxyUrl = normalizeProxyUrl(update.globalProxyUrl, { strict: true, label: '全局代理地址' });
     }
@@ -628,6 +733,7 @@ export class Store {
       try { await this.writeSettingsFile(JSON.stringify(await this.sealedSettings(next), null, 2)); }
       catch (error) { this.unreadableKeys = previousUnreadable; throw error; }
       this.settings = next;
+      for (const profile of next.profiles) updateConcurrencyLimit({ profileId: profile.id, maxConcurrency: profile.maxConcurrency });
       return publicSettings(next);
     });
     this.settingsQueue = operation.catch(() => {});
@@ -770,6 +876,9 @@ export class Store {
     }
     // A list whose every step is done is finished work and is not resurrected.
     if (session.tasks.length && !session.tasks.some(task => task?.status !== 'completed')) session.tasks = [];
+    // 1.7.4: 分叉来源只交出认识的字段；没有来源的会话不带这个键。
+    const branch = publicBranch(session.branch);
+    if (branch) session.branch = branch; else delete session.branch;
     return this.withSessionMeta(session);
   }
 
@@ -780,6 +889,80 @@ export class Store {
     const session = { id, title, workspace, createdAt: now, updatedAt: now, messages: [], tasks: [] };
     await this.saveSession(session);
     return this.withSessionMeta(session);
+  }
+
+
+  /**
+   * 1.7.4: 分叉——把对话在指定消息处复制成新的会话。
+   *
+   * 复制的是用户看得见的历史（含这条消息本身），子会话拿到全新的消息 ID，并在 branch 字段里
+   * 记住父会话、父标题和分叉点。父会话不变；子会话是普通会话，可以继续聊、置顶、删除。
+   * 正在生成中的回复不能作为分叉点：那会把半句话固定成历史。
+   */
+  async forkSession(id, { messageId = null, messageIndex = null, title = null } = {}) {
+    const parent = await this.getSession(id);
+    const messages = Array.isArray(parent.messages) ? parent.messages : [];
+    if (!messages.length) throw new HttpError(400, '这个对话还没有消息，无法分叉。');
+    let index = -1;
+    if (typeof messageId === 'string' && messageId) index = messages.findIndex(message => message?.id === messageId);
+    else if (Number.isInteger(messageIndex)) index = messageIndex;
+    if (!Number.isInteger(index) || index < 0 || index >= messages.length) throw new HttpError(404, '找不到要分叉的消息，可能这条消息已经不在了。');
+    const point = messages[index];
+    if (point?.role === 'assistant' && point.status === 'running') throw new HttpError(409, '这条回复还在生成，等它完成后再分叉。');
+    const parentTitle = typeof parent.title === 'string' && parent.title.trim() ? parent.title.trim() : '新对话';
+    const now = new Date().toISOString();
+    const childId = randomUUID();
+    const parentWorkspace = this.sessionWorkspace(parent);
+    const workspace = await fs.realpath(await this.ensureSessionWorkspace({ id: childId }));
+    const idMap = new Map();
+    const copied = messages.slice(0, index + 1).map(message => forkMessageCopy(message, idMap));
+    await this.copyForkAttachments(parentWorkspace, workspace, copied);
+    const child = {
+      id: childId,
+      title: forkTitle(title, parentTitle),
+      workspace,
+      createdAt: now,
+      updatedAt: now,
+      messages: copied,
+      tasks: [],
+      branch: {
+        parentSessionId: parent.id,
+        parentTitle,
+        messageId: typeof point?.id === 'string' ? point.id : null,
+        messageIndex: index,
+        at: now,
+      },
+    };
+    // 清单是「此刻」的对话状态：只有从最后一句分叉（也就是接着聊）才照搬，否则那份清单属于
+    // 分叉点之后的内容，带进子对话就是把还没发生的步骤写进历史。
+    const atEnd = index === messages.length - 1;
+    const tasks = atEnd && Array.isArray(parent.tasks) ? structuredClone(parent.tasks) : [];
+    if (tasks.length && tasks.some(task => task?.status !== 'completed')) child.tasks = tasks;
+    // 摘要只描述子对话真正拥有的历史：边界落在复制范围内才带过去，并指向子对话自己的消息 id。
+    const boundary = this.compactionBoundary(parent);
+    const throughMessageId = parent.compaction?.throughMessageId;
+    if (boundary >= 0 && boundary <= index && idMap.has(throughMessageId)) {
+      child.compaction = { ...structuredClone(parent.compaction), throughMessageId: idMap.get(throughMessageId) };
+    }
+    await this.saveSession(child);
+    return this.withSessionMeta(child);
+  }
+
+  /** 消息引用的附件必须出现在子会话自己的工作目录里，否则历史里的图片会打不开。 */
+  async copyForkAttachments(parentWorkspace, workspace, messages) {
+    const refs = new Set();
+    for (const message of messages) {
+      for (const attachment of Array.isArray(message?.attachments) ? message.attachments : []) {
+        if (isForkAttachmentRef(attachment?.ref)) refs.add(attachment.ref);
+      }
+    }
+    if (!refs.size) return;
+    const target = path.join(workspace, 'attachments');
+    await fs.mkdir(target, { recursive: true, mode: 0o700 });
+    for (const ref of refs) {
+      // 附件缺失不影响分叉：历史里那一行照旧显示，新对话仍然能用。
+      await fs.copyFile(path.join(parentWorkspace, 'attachments', ref), path.join(target, ref)).catch(() => {});
+    }
   }
 
   saveSession(session) {
@@ -826,6 +1009,7 @@ export class Store {
         id, title: typeof session.title === 'string' ? session.title : '新对话',
         createdAt: text(session.createdAt) ?? updatedAt, updatedAt,
         messageCount: Array.isArray(session.messages) ? session.messages.length : 0,
+        branch: publicBranch(session.branch),
         pinned,
         pinnedAt: meta.pinnedAt,
         locked,

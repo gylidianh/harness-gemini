@@ -2,12 +2,30 @@
 // No cc-haha code/assets copied. File changes and usage metrics stay in the existing UI.
 export function localImageUrl(value, sessionId) {
   if (typeof value !== 'string' || !sessionId || !value.trim() || /[\u0000-\u001f\u007f]/.test(value)) return '';
+  const safeDecode = str => {
+    try {
+      return decodeURIComponent(str);
+    } catch {
+      return str.replace(/(?:%[0-9A-Fa-f]{2})+/g, chunk => {
+        try { return decodeURIComponent(chunk); } catch { return chunk; }
+      });
+    }
+  };
   let path = value.trim();
-  // Markdown URL parser percent-encodes Unicode and spaces; decode exactly once before routing.
-  if (!/^file:/i.test(path)) { try { path = decodeURIComponent(path); } catch { return ''; } }
-  if (/^file:/i.test(path)) {
-    try { const url = new URL(path); if (url.hostname && url.hostname !== 'localhost' || url.username || url.password) return ''; path = decodeURIComponent(url.pathname).replace(/^\/([a-z]:\/)/i, '$1'); } catch { return ''; }
-  } else if (/^[a-z][a-z0-9+.-]*:/i.test(path) && !/^[a-z]:[\\/]/i.test(path)) return '';
+  // Markdown URL parser percent-encodes Unicode and spaces; decode at most once before routing.
+  if (!/^file:/i.test(path)) {
+    path = safeDecode(path);
+    if (/^[a-z][a-z0-9+.-]*:/i.test(path) && !/^[a-z]:[\\/]/i.test(path)) return '';
+  } else if (/^file:/i.test(path)) {
+    try {
+      const url = new URL(path);
+      if ((url.hostname && url.hostname !== 'localhost') || url.username || url.password) return '';
+      path = safeDecode(url.pathname).replace(/^\/([a-z]:\/)/i, '$1');
+    } catch {
+      return '';
+    }
+  }
+  if (/[\u0000-\u001f\u007f]/.test(path)) return '';
   if (path.startsWith('//') || path.startsWith('\\\\') || path.startsWith('~/')) return '';
   path = path.replace(/\\/g, '/').replace(/^\.\//, '');
   if (!path || path.split('/').includes('..')) return '';

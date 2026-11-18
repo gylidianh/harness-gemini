@@ -41,17 +41,18 @@ export function reasoningBudget(level) {
  * Models that accept an effort/level setting, matched by family and version rather than by an
  * exact name, so a dated snapshot (`o3-mini-2025-01-31`), a gateway prefix (`openai/o3-mini`) and
  * a family's own naming order (`claude-opus-4-8`) all match. Models genuinely without reasoning
- * control — `gpt-4o`, `claude-3-5-sonnet`, `gemini-1.5-flash`, `qwen-plus` — still answer no.
+ * control — `gpt-4o`, `claude-3-5-sonnet`, `gemini-1.5-flash`, `qwen-plus`, `deepseek-v3`,
+ * `glm-4-flash`, `glm-4-air`, `glm-4-plus` — still answer no.
  */
 const CHAT_REASONING_MODELS = [
   // OpenAI o-series, and the gpt-5 line and everything after it.
-  /(?:^|\/)(?:o[1-9]\d*|gpt-[5-9]\d*|gpt-\d{2,})(?:[.\-]|$)/i,
-  // DeepSeek R1, and the v3.1 / v4 lines that followed it.
-  /deepseek-(?:r\d|v[3-9](?:\.\d+)?(?:[.\-]|$))/i,
+  /(?:^|[/:])(?:o[1-9]\d*|gpt-[5-9]\d*|gpt-\d{2,})(?:[.\-]|$)/i,
+  // DeepSeek R1 / reasoner, and the v3.1+ / v4+ hybrid thinking lines (excluding plain deepseek-v3 / v3.0).
+  /deepseek-(?:r\d+|reasoner|v3\.[1-9]\d*(?:[.\-]|$)|(?:v[4-9]|v\d{2,})(?:\.\d+)?(?:[.\-]|$))/i,
   // Qwen QwQ and Qwen3 and later.
   /(?:qwq|qwen[3-9])/i,
-  // Zhipu GLM 4.5 and later.
-  /glm-[4-9](?:\.\d+)?/i,
+  // Zhipu GLM Z1 / Zero reasoning series, and GLM 4.5+ / 5+ (excluding plain glm-4 / 4-flash / 4-air / 4-plus).
+  /glm-(?:z\d+|zero|4\.(?:[5-9]\d*|[1-9]\d+)|(?:[5-9]|\d{2,})(?:\.\d+)?)/i,
   // Moonshot Kimi thinking models.
   /kimi-[a-z0-9.-]*(?:k2|k3|think)/i,
   // xAI Grok 3 and later.
@@ -61,7 +62,7 @@ const CHAT_REASONING_MODELS = [
   // Claude with extended thinking, in either naming order (claude-4-sonnet, claude-opus-4-8).
   /claude-(?:[a-z]+-)?(?:3[.\-]7|[4-9])/i,
   // A model that names its own thinking.
-  /(?:reasoning|thinking|-think)/i,
+  /(?:reasoner|reasoning|thinking|-think)/i,
 ];
 
 /** Claude models with extended thinking on the Messages API. */
@@ -81,7 +82,7 @@ const CLAUDE_LEGACY_BUDGET_MODELS = [
 
 /** Families whose OpenAI-compatible endpoint is known to read only `reasoning_effort`. */
 const CHAT_EFFORT_ONLY_MODELS = [
-  /(?:^|\/)(?:o[1-9]\d*|gpt-[5-9]\d*|gpt-\d{2,})(?:[.\-]|$)/i,
+  /(?:^|[/:])(?:o[1-9]\d*|gpt-[5-9]\d*|gpt-\d{2,})(?:[.\-]|$)/i,
   /grok-[3-9]/i,
   /gemini-(?:2\.5|[3-9])/i,
 ];

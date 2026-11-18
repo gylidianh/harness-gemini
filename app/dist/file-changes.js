@@ -237,30 +237,68 @@ export function createFileChangesUI(React) {
       pathMenuRef.current = null; setPathMenu(null);
       if (restoreFocus && target?.isConnected) target.focus({ preventScroll: true });
     }, []);
+    const sessionIdRef = React.useRef(sessionId);
+    sessionIdRef.current = sessionId;
+    const enabledRef = React.useRef(enabled);
+    enabledRef.current = enabled;
     const ticket = React.useRef(0);
+    const applyEpochRef = React.useRef(0);
+    const busyRef = React.useRef(false);
     const toast = React.useCallback((message, type) => { try { onToast?.(message, type); } catch { /* ignore */ } }, [onToast]);
 
     const load = React.useCallback(async () => {
-      if (!sessionId || !enabled) { setData(null); return; }
-      const mine = ++ticket.current;
+      const targetSessionId = sessionId;
+      if (sessionIdRef.current !== targetSessionId) return;
+      if (!targetSessionId || !enabled || !enabledRef.current) {
+        ++ticket.current;
+        setData(null);
+        setError('');
+        return;
+      }
+      const currentTicket = ++ticket.current;
       try {
-        const next = await requestJson(base(sessionId));
-        if (mine === ticket.current) { setData(next); setError(''); }
+        const next = await requestJson(base(targetSessionId));
+        if (currentTicket === ticket.current && sessionIdRef.current === targetSessionId && enabledRef.current) {
+          setData(next);
+          setError('');
+        }
       } catch (err) {
-        if (mine === ticket.current) setError(err.message);
+        if (currentTicket === ticket.current && sessionIdRef.current === targetSessionId && enabledRef.current) {
+          setError(err.message);
+        }
       }
     }, [sessionId, enabled]);
 
-    React.useEffect(() => { setData(null); setConflicts({}); setError(''); closePathMenu(false); }, [sessionId, enabled, closePathMenu]);
+    React.useEffect(() => {
+      ++ticket.current;
+      ++applyEpochRef.current;
+      busyRef.current = false;
+      setData(null);
+      setConflicts({});
+      setError('');
+      setBusy(false);
+      setCollapsed(false);
+      closePathMenu(false);
+    }, [sessionId, enabled, closePathMenu]);
     React.useEffect(() => { load(); }, [load, revision]);
 
     const apply = async (turn, action, paths, force = false) => {
-      if (!sessionId || busy || !enabled) return;
+      const targetSessionId = sessionId;
+      if (!targetSessionId || busy || busyRef.current || !enabled || sessionIdRef.current !== targetSessionId) return;
+      const currentApplyEpoch = ++applyEpochRef.current;
+      const isCurrentSession = () => (
+        sessionIdRef.current === targetSessionId &&
+        enabledRef.current &&
+        applyEpochRef.current === currentApplyEpoch
+      );
+      busyRef.current = true;
       setBusy(true);
+      setError('');
       try {
-        const result = await requestJson(`${base(sessionId)}/${encodeURIComponent(turn.turnId)}/apply`, {
+        const result = await requestJson(`${base(targetSessionId)}/${encodeURIComponent(turn.turnId)}/apply`, {
           method: 'POST', body: JSON.stringify({ action, ...(paths ? { paths } : {}), ...(force ? { force: true } : {}) }),
         });
+        if (!isCurrentSession()) return;
         const verb = action === 'revert' ? '撤回' : '恢复';
         setConflicts(prev => {
           const next = { ...prev };
@@ -274,9 +312,14 @@ export function createFileChangesUI(React) {
         if (!result.done?.length && !problems.length && !result.conflicts?.length) toast(`没有需要${verb}的文件`, 'info');
         await load();
       } catch (err) {
+        if (!isCurrentSession()) return;
+        setError(err.message);
         toast(err.message, 'error');
       } finally {
-        setBusy(false);
+        if (isCurrentSession()) {
+          busyRef.current = false;
+          setBusy(false);
+        }
       }
     };
 
@@ -295,7 +338,7 @@ export function createFileChangesUI(React) {
       !error && !has && h('div', { className: 'hgfc-empty' }, data ? 'agent 在这个对话里还没有写入或下载文件。改动会记在这里，可以整轮或逐个文件撤回。' : '正在读取…'),
       has && !collapsed && h('div', { className: 'hgfc-turns' },
         turns.map((turn, index) => h(TurnCard, {
-          key: turn.turnId, sessionId, turn, defaultOpen: index === 0, busy, onPathMenu: openPathMenu,
+          key: `${sessionId}:${turn.turnId}`, sessionId, turn, defaultOpen: index === 0, busy, onPathMenu: openPathMenu,
           conflict: conflicts[turn.turnId] || null,
           onApply: (t, action, paths) => apply(t, action, paths),
           onForce: () => { const c = conflicts[turn.turnId]; if (c) apply(turn, c.action, c.items.map(item => item.path), true); },

@@ -1,0 +1,38 @@
+{
+  "name": "hsci_query",
+  "description": "HSCIQ 只读商品归类查询，支持官方13个只读工具；先 action=list 获取真实工具参数，再 action=call。查询会发送参数到远端，可能消耗配额。",
+  "transport": "mcp",
+  "mcp": {
+    "endpoint": "https://www.hsciq.com/mcp/rpc",
+    "apiKeyEnv": "HSCIQ_API_KEY",
+    "auth": "x-api-key",
+    "readOnly": true
+  },
+  "readOnly": true,
+  "timeoutMs": 60000,
+  "pathParameters": [],
+  "parameters": {
+    "type": "object",
+    "properties": {
+      "action": {
+        "type": "string",
+        "enum": [
+          "list",
+          "call"
+        ]
+      },
+      "name": {
+        "type": "string",
+        "description": "远端工具名称，先通过list获取。"
+      },
+      "arguments": {
+        "type": "object",
+        "description": "原样传给远端工具的arguments。"
+      }
+    },
+    "required": [
+      "action"
+    ],
+    "additionalProperties": false
+  }
+}

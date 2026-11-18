@@ -45,7 +45,7 @@ export function createSkillsUI(React, api) {
     const needle = query.trim().toLowerCase();
     const filtered = state.skills.filter(s => `${s.name} ${s.description} ${s.tool}`.toLowerCase().includes(needle));
     return h('div', { className: 'skills-settings' },
-      h('p', { className: 'skills-intro' }, '启用后，模型会在需要时调用技能。开关即时保存。'),
+      h('p', { className: 'skills-intro' }, '启用后，模型会在需要时调用技能。开关即时保存。若要接入任意厂商的远程 Streamable HTTP 或本地 stdio MCP 服务（含 HSCIQ 预设与密钥加密保存），可直接在左侧「MCP」分类中添加。'),
       h('div', { className: 'skills-toolbar' },
         h('button', { type: 'button', className: 'button button-quiet small-button', disabled: disabled || state.loading || !!busy, onClick: () => action('open', () => api.openExternalSkillsFolder()) }, h(Icon, { type: 'folder' }), '打开技能文件夹'),
         h('button', { type: 'button', className: 'button button-quiet small-button', disabled: disabled || state.loading || !!busy, onClick: refresh }, h(Icon, { type: 'refresh' }), state.loading ? '读取中' : '刷新'),

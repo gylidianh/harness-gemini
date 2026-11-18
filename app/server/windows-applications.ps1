@@ -38,9 +38,32 @@ public static class LocalHarnessApplications {
         public IntPtr hProcess, hThread;
         public uint dwProcessId, dwThreadId;
     }
+    [StructLayout(LayoutKind.Sequential)]
+    private struct FILETIME {
+        public uint dwLowDateTime, dwHighDateTime;
+    }
+    [StructLayout(LayoutKind.Sequential)]
+    private struct BY_HANDLE_FILE_INFORMATION {
+        public uint dwFileAttributes;
+        public FILETIME ftCreationTime, ftLastAccessTime, ftLastWriteTime;
+        public uint dwVolumeSerialNumber, nFileSizeHigh, nFileSizeLow, nNumberOfLinks, nFileIndexHigh, nFileIndexLow;
+    }
+    private static readonly IntPtr InvalidHandle = new IntPtr(-1);
+    private const uint ShareAll = 0x00000001 | 0x00000002 | 0x00000004;
+    private const uint OpenExisting = 3;
+    private const uint FlagBackupSemantics = 0x02000000;
+    private const uint AttributeDirectory = 0x00000010;
+
     [DllImport("kernel32.dll", CharSet = CharSet.Unicode, ExactSpelling = true, SetLastError = true)]
     [return: MarshalAs(UnmanagedType.Bool)]
     private static extern bool CreateProcessW(string applicationName, StringBuilder commandLine, IntPtr processAttributes, IntPtr threadAttributes, [MarshalAs(UnmanagedType.Bool)] bool inheritHandles, uint creationFlags, IntPtr environment, string currentDirectory, ref STARTUPINFO startupInfo, out PROCESS_INFORMATION processInformation);
+    [DllImport("kernel32.dll", CharSet = CharSet.Unicode, ExactSpelling = true, SetLastError = true)]
+    private static extern IntPtr CreateFileW(string fileName, uint desiredAccess, uint shareMode, IntPtr securityAttributes, uint creationDisposition, uint flagsAndAttributes, IntPtr templateFile);
+    [DllImport("kernel32.dll", CharSet = CharSet.Unicode, ExactSpelling = true, SetLastError = true)]
+    private static extern uint GetFinalPathNameByHandleW(IntPtr file, StringBuilder filePath, uint filePathSize, uint flags);
+    [DllImport("kernel32.dll", ExactSpelling = true, SetLastError = true)]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    private static extern bool GetFileInformationByHandle(IntPtr file, out BY_HANDLE_FILE_INFORMATION fileInformation);
     [DllImport("kernel32.dll", ExactSpelling = true)]
     [return: MarshalAs(UnmanagedType.Bool)]
     private static extern bool CloseHandle(IntPtr handle);
@@ -148,22 +171,77 @@ public static class LocalHarnessApplications {
         }
     }
 
-    private static string ValidateFile(string file, string workspace) {
-        string root = Path.GetFullPath(workspace).TrimEnd(Path.DirectorySeparatorChar) + Path.DirectorySeparatorChar;
-        string target = Path.GetFullPath(file);
-        if (!target.StartsWith(root, StringComparison.OrdinalIgnoreCase)) throw new IOException("OUTSIDE_WORKSPACE");
-        string current = target;
-        while (current != null && (current.StartsWith(root, StringComparison.OrdinalIgnoreCase) || String.Equals(current.TrimEnd(Path.DirectorySeparatorChar), root.TrimEnd(Path.DirectorySeparatorChar), StringComparison.OrdinalIgnoreCase))) {
-            FileAttributes attributes = File.GetAttributes(current);
-            if ((attributes & FileAttributes.ReparsePoint) != 0) throw new IOException("REPARSE_POINT");
-            current = Path.GetDirectoryName(current);
-        }
-        if ((File.GetAttributes(target) & FileAttributes.Directory) != 0) throw new IOException("NOT_A_FILE");
-        return target;
+    private static string StripExtendedPrefix(string value) {
+        if (value.StartsWith(@"\\?\UNC\", StringComparison.OrdinalIgnoreCase)) return @"\\" + value.Substring(8);
+        if (value.StartsWith(@"\\?\", StringComparison.OrdinalIgnoreCase)) return value.Substring(4);
+        return value;
     }
 
-    public static List<Application> List(string file, string workspace) {
-        string target = ValidateFile(file, workspace);
+    private static string TrimNonRootSeparator(string fullPath) {
+        string root = Path.GetPathRoot(fullPath);
+        if (!String.IsNullOrEmpty(root) && fullPath.Length <= root.Length) return fullPath;
+        return fullPath.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
+    }
+
+    private static string EnsureTrailingSeparator(string directoryPath) {
+        if (directoryPath.EndsWith(Path.DirectorySeparatorChar.ToString(), StringComparison.Ordinal)) return directoryPath;
+        return directoryPath + Path.DirectorySeparatorChar;
+    }
+
+    private static string ResolveFinalPath(string path, out bool isDirectory) {
+        // Metadata-only access (0) avoids hydrating cloud-only OneDrive placeholders; omitting
+        // FILE_FLAG_OPEN_REPARSE_POINT resolves symlinks and junctions to their final destination.
+        IntPtr handle = CreateFileW(path, 0, ShareAll, IntPtr.Zero, OpenExisting, FlagBackupSemantics, IntPtr.Zero);
+        if (handle == InvalidHandle || handle == IntPtr.Zero) {
+            int error = Marshal.GetLastWin32Error();
+            if (error == 2) throw new FileNotFoundException("FILE_NOT_FOUND", path);
+            if (error == 3) throw new DirectoryNotFoundException("DIRECTORY_NOT_FOUND");
+            throw new IOException("OPEN_HANDLE_FAILED", Marshal.GetHRForLastWin32Error());
+        }
+        try {
+            BY_HANDLE_FILE_INFORMATION info;
+            if (!GetFileInformationByHandle(handle, out info)) {
+                throw new IOException("FILE_INFO_FAILED", Marshal.GetHRForLastWin32Error());
+            }
+            isDirectory = (info.dwFileAttributes & AttributeDirectory) != 0;
+            StringBuilder buffer = new StringBuilder(512);
+            uint length = GetFinalPathNameByHandleW(handle, buffer, (uint)buffer.Capacity, 0);
+            if (length >= (uint)buffer.Capacity) {
+                buffer = new StringBuilder((int)length + 1);
+                length = GetFinalPathNameByHandleW(handle, buffer, (uint)buffer.Capacity, 0);
+            }
+            if (length == 0 || length >= (uint)buffer.Capacity) {
+                throw new IOException("FINAL_PATH_FAILED", Marshal.GetHRForLastWin32Error());
+            }
+            return Path.GetFullPath(StripExtendedPrefix(buffer.ToString(0, (int)length)));
+        } finally {
+            CloseHandle(handle);
+        }
+    }
+
+    private static string ValidateFile(string file, string workspace) {
+        string lexicalWorkspace = TrimNonRootSeparator(Path.GetFullPath(workspace));
+        string lexicalRoot = EnsureTrailingSeparator(lexicalWorkspace);
+        string lexicalTarget = Path.GetFullPath(file);
+        bool lexicalIsRoot = String.Equals(TrimNonRootSeparator(lexicalTarget), lexicalWorkspace, StringComparison.OrdinalIgnoreCase);
+        if (!lexicalIsRoot && !lexicalTarget.StartsWith(lexicalRoot, StringComparison.OrdinalIgnoreCase)) {
+            throw new IOException("OUTSIDE_WORKSPACE");
+        }
+        bool workspaceIsDirectory;
+        string finalWorkspace = TrimNonRootSeparator(ResolveFinalPath(lexicalWorkspace, out workspaceIsDirectory));
+        if (!workspaceIsDirectory) throw new IOException("WORKSPACE_NOT_A_DIRECTORY");
+        string finalRoot = EnsureTrailingSeparator(finalWorkspace);
+        bool targetIsDirectory;
+        string finalTarget = ResolveFinalPath(lexicalTarget, out targetIsDirectory);
+        bool finalIsRoot = String.Equals(TrimNonRootSeparator(finalTarget), finalWorkspace, StringComparison.OrdinalIgnoreCase);
+        if (!finalIsRoot && !finalTarget.StartsWith(finalRoot, StringComparison.OrdinalIgnoreCase)) {
+            throw new IOException("REPARSE_POINT");
+        }
+        if (targetIsDirectory) throw new IOException("NOT_A_FILE");
+        return finalTarget;
+    }
+
+    private static List<Application> BuildApplicationsForTarget(string target) {
         string extension = Path.GetExtension(target).ToLowerInvariant();
         List<Application> applications = new List<Application>();
         HashSet<string> found = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
@@ -178,6 +256,11 @@ public static class LocalHarnessApplications {
         List<Application> ordered = applications.FindAll(delegate(Application app) { return app.Recommended; });
         ordered.AddRange(applications.FindAll(delegate(Application app) { return !app.Recommended; }));
         return ordered;
+    }
+
+    public static List<Application> List(string file, string workspace) {
+        string target = ValidateFile(file, workspace);
+        return BuildApplicationsForTarget(target);
     }
 
     private static string QuoteArgument(string value) {
@@ -198,7 +281,7 @@ public static class LocalHarnessApplications {
         string target = ValidateFile(file, workspace);
         Application selected = null;
         // Re-detect installed, known executables on every click; a client ID is never a command or a path.
-        foreach (Application application in List(target, workspace)) if (String.Equals(application.Id, applicationId, StringComparison.Ordinal)) { selected = application; break; }
+        foreach (Application application in BuildApplicationsForTarget(target)) if (String.Equals(application.Id, applicationId, StringComparison.Ordinal)) { selected = application; break; }
         if (selected == null) throw new IOException("APPLICATION_NOT_FOUND");
         using (FileStream pinned = new FileStream(target, FileMode.Open, FileAccess.Read, FileShare.ReadWrite)) {
             STARTUPINFO startup = new STARTUPINFO { cb = (uint)Marshal.SizeOf(typeof(STARTUPINFO)), dwFlags = 0x00000001, wShowWindow = 1 };

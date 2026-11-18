@@ -1,0 +1,126 @@
+/*!
+ * Harness Gemini UI — Design Tokens (`tokens.css`)
+ * License: MIT
+ *
+ * Modern minimalist design system tokens inspired by Linear, Cursor & Open WebUI:
+ * breathable whitespace, eye-soothing neutral surfaces, crisp 1px micro-borders,
+ * soft corner radii, and ultra-restrained ambient elevation shadows.
+ */
+
+:root {
+  /* Color Scheme & Rendering */
+  color-scheme: light;
+  --lightningcss-light: initial;
+  --lightningcss-dark: ;
+  color: var(--text);
+  background: var(--bg);
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+
+  /* Canvas & Surface Hierarchy (Eye-Friendly Soft Alabaster) */
+  --bg: #ffffff;
+  --sidebar: #f7f8fa;
+  --panel: #fafbfc;
+  --surface: #ffffff;
+  --surface-raised: #ffffff;
+  --input-bg: #f4f6f8;
+
+  /* Hairlines & Micro-Borders */
+  --line: #eaecf0;
+  --line-strong: #d8dde6;
+
+  /* Typography Ink Hierarchy */
+  --text: #181c23;
+  --text-secondary: #343b46;
+  --muted: #5c6470;
+  --subtle: #868e99;
+  --brand-ink: #7d3929;
+
+  /* Brand & Interactive Accent */
+  --accent: #1a73e8;
+  --accent-strong: #1765cc;
+  --accent-hover: #1558b0;
+  --accent-deep: #174ea6;
+  --info-deep: #185abc;
+  --accent-tonal: #edf4ff;
+  --accent-tonal-strong: #d4e4fc;
+  --on-accent: #ffffff;
+  --on-danger: #ffffff;
+
+  /* Semantic Status Palette */
+  --green: #167c3a;
+  --green-tonal: #e7f5ec;
+  --red: #d93025;
+  --red-tonal: #fdeae8;
+  --amber: #a85d00;
+  --amber-tonal: #fef6e0;
+
+  /* Warning & Danger Extended Tokens */
+  --warning-strong: #a85d00;
+  --warning-deep: #7c4500;
+  --warning-border: rgba(168, 93, 0, 0.24);
+  --warning-border-strong: rgba(168, 93, 0, 0.4);
+  --warning-surface: #fef8e7;
+
+  --danger-strong: #c5281e;
+  --danger-deep: #9e1c14;
+  --danger-border: rgba(217, 48, 37, 0.24);
+  --danger-hover: #b3261e;
+  --danger-hover-bg: #fce8e6;
+  --danger-surface: #fdf0ee;
+
+  /* Brand Four-Color Mark */
+  --g-blue: #4285f4;
+  --g-red: #ea4335;
+  --g-yellow: #fbbc04;
+  --g-green: #34a853;
+
+  /* Interactive Hover & Focus States */
+  --hover: rgba(24, 28, 35, 0.048);
+  --hover-strong: rgba(24, 28, 35, 0.085);
+  --surface-hover: rgba(24, 28, 35, 0.045);
+  --focus-ring: 0 0 0 3px color-mix(in srgb, var(--accent) 14%, transparent);
+
+  /* Ultra-Restrained Diffused Shadows (Reserved strictly for floating overlays & modals) */
+  --shadow-1: 0 1px 2px rgba(15, 23, 42, 0.035), 0 2px 6px rgba(15, 23, 42, 0.025);
+  --shadow-2: 0 6px 20px rgba(15, 23, 42, 0.065), 0 1px 3px rgba(15, 23, 42, 0.03);
+  --shadow-3: 0 10px 30px rgba(15, 23, 42, 0.085), 0 2px 6px rgba(15, 23, 42, 0.04);
+  --shadow-4: 0 18px 48px rgba(15, 23, 42, 0.11), 0 4px 12px rgba(15, 23, 42, 0.045);
+
+  /* Frosted Glass Popover Tokens */
+  --glass-bg: color-mix(in srgb, var(--surface) 88%, transparent);
+  --glass-blur: blur(16px) saturate(1.3);
+
+  /* Layout Metrics */
+  --sidebar-width: 256px;
+  --chat-min-width: 540px;
+  --header-height: 58px;
+
+  /* Corner Radius Scale */
+  --radius-xs: 6px;
+  --radius-sm: 8px;
+  --radius-md: 12px;
+  --radius-lg: 16px;
+  --radius-xl: 20px;
+  --radius-2xl: 24px;
+  --radius-full: 999px;
+
+  /* Motion Curves */
+  --ease-out-soft: cubic-bezier(0.2, 0.7, 0.3, 1);
+
+  /* Typography Stacks */
+  --font-sans:
+    "Google Sans", "Inter", "Segoe UI Variable Display", "Segoe UI",
+    system-ui, -apple-system, "PingFang SC", "Microsoft YaHei UI", "Microsoft YaHei", sans-serif;
+  --mono:
+    "Google Sans Mono", "JetBrains Mono", "Cascadia Code", "SFMono-Regular", Consolas, monospace;
+  --luxe-serif:
+    "Palatino Linotype", Palatino, "Book Antiqua", Georgia, "Noto Serif SC",
+    "Source Han Serif SC", "Source Han Serif CN", "Songti SC", STSong, SimSun, serif;
+  --luxe-gold-leaf:
+    linear-gradient(135deg, #f3e2b3 0%, #dcba78 34%, #c49a55 68%, #a8803f 100%);
+
+  font-family: var(--font-sans);
+}

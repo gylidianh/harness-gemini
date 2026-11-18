@@ -1,0 +1,28 @@
+/*!
+ * Harness Gemini UI — Main Stylesheet Entry (`main.css`)
+ * License: MIT
+ *
+ * Cascade Layer Order:
+ * 1. `katex.css`    — KaTeX 0.19.0 Math Typesetting & Webfont `@font-face` Declarations
+ * 2. `tokens.css`   — Global CSS Custom Properties (Palette, Radii, Shadows, Typography)
+ * 3. `base.css`     — Modern Reset, Adaptive Scrollbars, Universal Buttons & Keyframes
+ * 4. `layout.css`   — 3-Column App Shell, Sidebar, Frosted Top Header & Right Panel Frame
+ * 5. `chat.css`     — Welcome Screen, Conversation Stream, Markdown, Code & Tool Cards
+ * 6. `composer.css` — Bottom Composer, Attachments, Popovers, Slash Menu & Context Ring
+ * 7. `panels.css`   — Workspace Tabs, Artifacts/Subagents/Files, Browser, Settings & Modals
+ * 8. `themes.css`   — Theme Skins (`classic`, `gemini-dark`, `claude`, `luxe-noir`, `luxe-ivory`)
+ *                     & Responsive Breakpoints
+ *
+ * Note: For `desktop/smoke.mjs` compatibility (which scans direct `<link>` stylesheets for
+ * `.woff2` URLs without recursive `@import` resolution), `index.html` also links
+ * `/styles/katex.css` directly alongside `/styles/main.css`.
+ */
+
+@import "./katex.css";
+@import "./tokens.css";
+@import "./base.css";
+@import "./layout.css";
+@import "./chat.css";
+@import "./composer.css";
+@import "./panels.css";
+@import "./themes.css";

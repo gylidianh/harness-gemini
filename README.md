@@ -5,17 +5,15 @@ Windows 桌面 AI 工作台，在一个窗口中聊天、编程、生图和浏�
 [![版本](https://img.shields.io/github/v/release/gylidianh/harness-gemini)](https://github.com/gylidianh/harness-gemini/releases/latest)
 ![Windows x64](https://img.shields.io/badge/Windows-10%20%2F%2011%20x64-0078d4)
 
-**[下载 1.6.8 安装包](https://github.com/gylidianh/harness-gemini/releases/download/v1.6.8/Harness-Gemini-1.6.8-win-x64.exe)** · **[浏览源码](app/)** · [版本说明](CHANGELOG.md) · [使用指南](docs/usage.md) · [开发说明](docs/development.md) · [常见问题](docs/faq.md)
+**[下载 2.0.2 安装包](https://github.com/gylidianh/harness-gemini/releases/download/v2.0.2/Harness-Gemini-2.0.2-win-x64.exe)** · **[浏览源码](app/)** · [版本说明](CHANGELOG.md) · [使用指南](docs/usage.md) · [开发说明](docs/development.md) · [常见问题](docs/faq.md)
 
 ![Harness Gemini 1.4.4 主界面](docs/images/home-1.4.4.png)
 
-## 1.6.8 更新
+## 2.0.2 更新
 
-- 图片加载与重排、缩略图替换、断线重连后消息重载，不再被当成「读者上滚」而打断会话的自动跟随底部。
-- 跟随状态与「↓ 最新消息」按钮由同一处派生，不再出现「悬在半空却没有按钮」或「已经贴底仍挂着按钮」。
-- 读者自己的滚轮、滚动条、键盘和触摸上滚仍立刻停止跟随；消息内嵌套滚动区不再误触发，内容不足一屏时也不会误关。
-- 输入框高度变化（附件、等待回答、进度行、多行输入）后重新贴底。
-- [1.6.8 发布说明](docs/releases/1.6.8.md)；Release 提供安装包、源码 ZIP 和 SHA256 校验文件。
+- 手机待办刷新时保留自定义回复、焦点和光标，提交失败后可重试。
+- 手机端支持为每位 Team 成员选择连接和模型，或继承默认值。
+- 使用自建 VPS 中继时，请同时更新 `relay-server/phone.html`；直连用户更新桌面端后刷新手机页面即可。
 
 ## 功能
 
@@ -89,9 +87,7 @@ Windows 桌面 AI 工作台，在一个窗口中聊天、编程、生图和浏�
 
 ## 源码范围
 
-[app/](app/) 包含与已发布 1.5.8 对应的 [桌面端](app/desktop/)、[服务端](app/server/)、[共享模块](app/shared/) 和 [新增 UI 模块与前端产物](app/dist/)，可在 GitHub 上直接点开查看。`SOURCE-MANIFEST.json` 记录这些文件在发布包中的校验值。
-
-基础界面的原始 React 工程目前不在仓库中，不能从这里重新构建该前端 bundle；现有前端产物可直接运行并随桌面程序打包。详见 [开发说明](docs/development.md)。
+[app/](app/) 包含 2.0.2 的桌面端、服务端、手机页和前端源码；[app/ui/](app/ui/) 可重新生成界面。自建中继见 [relay-server/](relay-server/)。
 
 ## 贡献者
 

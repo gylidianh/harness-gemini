@@ -1,0 +1,49 @@
+{
+  "name": "hsci_mcp",
+  "description": "HSCIQ MCP 全功能商品归类接口，含创建归类表单与追加对话等写操作。先 action=list 查看工具schema，再 action=call。imagePaths会上传工作目录内图片到配置的HSCIQ端点，须明确用户授权。",
+  "transport": "mcp",
+  "mcp": {
+    "endpoint": "https://www.hsciq.com/mcp/rpc",
+    "apiKeyEnv": "HSCIQ_API_KEY",
+    "auth": "x-api-key",
+    "readOnly": false
+  },
+  "readOnly": false,
+  "timeoutMs": 60000,
+  "pathParameters": [
+    "imagePaths"
+  ],
+  "parameters": {
+    "type": "object",
+    "properties": {
+      "action": {
+        "type": "string",
+        "enum": [
+          "list",
+          "call"
+        ]
+      },
+      "name": {
+        "type": "string",
+        "description": "远端工具名称，先通过list获取。"
+      },
+      "arguments": {
+        "type": "object",
+        "description": "原样传给远端工具的arguments。"
+      },
+      "imagePaths": {
+        "type": "array",
+        "items": {
+          "type": "string"
+        },
+        "minItems": 1,
+        "maxItems": 3,
+        "description": "仅create_guilei_form：要上传的工作目录内1–3张图片，每张最多1MiB，不能与arguments.images并用。"
+      }
+    },
+    "required": [
+      "action"
+    ],
+    "additionalProperties": false
+  }
+}
