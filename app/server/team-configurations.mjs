@@ -4,9 +4,9 @@ import { randomUUID } from 'node:crypto';
 import { checkAbort, HttpError } from './util.mjs';
 
 export class TeamConfigurationManager {
-  constructor({ timeoutMs = 10 * 60_000 } = {}) {
+  constructor({ timeoutMs = 10 * 60_000, pending = new Map() } = {}) {
     this.timeoutMs = timeoutMs;
-    this.pending = new Map();
+    this.pending = pending;
   }
 
   list(sessionId = '') {

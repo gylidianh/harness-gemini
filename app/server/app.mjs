@@ -17,6 +17,7 @@ import { completion, isInterrupted, listModels } from './provider.mjs';
 import { AGENT_TOOLS, browserAddress, ApprovalManager, BROWSER_TOOL_NAMES, COMPUTER_TOOL_NAMES, approvalSummary, executeTool, planToolExecution } from './tools.mjs';
 import { QuestionManager, normalizeQuestionAnswer } from './questions.mjs';
 import { TeamConfigurationManager } from './team-configurations.mjs';
+import { createPendingUserActionQueues } from './pending-user-actions.mjs';
 import { BrowserBridge } from './browser-bridge.mjs';
 import { GenerationMetrics } from './metrics.mjs';
 import {
@@ -510,7 +511,7 @@ function startSse(res, signal) {
   return { isOpen, send, close() { closed = true; clearInterval(keepalive); if (!res.writableEnded) res.end(); } };
 }
 
-export async function createApp({ dataDir = path.join(PROJECT_ROOT, 'data'), defaultWorkspace = path.join(PROJECT_ROOT, 'workspace'), distDir = path.join(PROJECT_ROOT, 'dist'), allowedOrigins, webOptions = {}, workspaceFileActions, onRunFinished, secrets, externalSkillsDir, seedExternalSkills = false, authorizeBrowserNavigation = null, mcpFetch } = {}) {
+export async function createApp({ dataDir = path.join(PROJECT_ROOT, 'data'), defaultWorkspace = path.join(PROJECT_ROOT, 'workspace'), distDir = path.join(PROJECT_ROOT, 'dist'), allowedOrigins, webOptions = {}, workspaceFileActions, onRunFinished, onWaitingForUser, secrets, externalSkillsDir, seedExternalSkills = false, authorizeBrowserNavigation = null, mcpFetch } = {}) {
   const store = await new Store({ dataDir, defaultWorkspace, ...(secrets ? { secrets } : {}) }).init();
   const skills = await new SkillStore({ dataDir }).init();
   const externalSkills = await new ExternalSkillRegistry({ directory: externalSkillsDir ?? path.join(dataDir, 'external-skills'), dataDir }).init({ seed: seedExternalSkills === true });
@@ -539,9 +540,10 @@ export async function createApp({ dataDir = path.join(PROJECT_ROOT, 'data'), def
   // Every failure is also written to <dataDir>/logs/errors.log, so a reason survives the banner.
   const errorLog = new ErrorLog({ dataDir, version: VERSION });
   for (const problem of store.startupProblems ?? []) void errorLog.write({ source: problem.source ?? 'startup', message: problem.message, error: problem.error, ...(problem.profileId ? { profileId: String(problem.profileId) } : {}) });
-  const approvals = new ApprovalManager();
-  const questions = new QuestionManager();
-  const teamConfigurations = new TeamConfigurationManager();
+  const pending = createPendingUserActionQueues(onWaitingForUser);
+  const approvals = new ApprovalManager({ pending: pending.approvals });
+  const questions = new QuestionManager({ pending: pending.questions });
+  const teamConfigurations = new TeamConfigurationManager({ pending: pending.teamConfigurations });
   const browsers = new BrowserBridge();
   // fix3: the plan says whether the user approved a local-network address (an IP literal, or a
   // name the plan found resolving into the local network). Full access approves both implicitly.

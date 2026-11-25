@@ -444,7 +444,7 @@ export const AGENT_TOOLS = [
 ];
 
 export class ApprovalManager {
-  constructor() { this.pending = new Map(); }
+  constructor({ pending = new Map() } = {}) { this.pending = pending; }
   ask({ runId, toolName, args, summary, signal, emit }) {
     checkAbort(signal);
     const id = randomUUID();

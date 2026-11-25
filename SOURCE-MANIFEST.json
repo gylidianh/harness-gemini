@@ -1,9 +1,9 @@
 {
-  "version": "2.0.2",
-  "release": "https://github.com/gylidianh/harness-gemini/releases/tag/v2.0.2",
-  "installerSha256": "8814de65f367ae5cefd9e9b6a1c4538950c49a39acf3b3d9df53bc7dfed75737",
-  "installerBytes": 128159142,
-  "appArchiveSha256": "ceeb0b7fbf01148364b11a3386524946e736d766f41eb16b680c032dd849110b",
+  "version": "2.0.3",
+  "release": "https://github.com/gylidianh/harness-gemini/releases/tag/v2.0.3",
+  "installerSha256": "e8a8911fc6be2bfe8c68d7b279ae4d05bf49e4ebf430732489b26e7eb836bec9",
+  "installerBytes": 128164378,
+  "appArchiveSha256": "a5da010d17a04a456314ff9e98f806aa3a72cc0e8315469f1136c04f3d89bb79",
   "scope": "Hashes of corresponding source files. Builder normalizes package.json; other listed files are byte-identical to the installer payload.",
   "files": [
     {
@@ -28,8 +28,8 @@
     },
     {
       "path": "app/desktop/browser.mjs",
-      "bytes": 80600,
-      "sha256": "ad9bd90fd8671d13946e4db6b9aaebf11467c883a87ed2f928c5fa4408551b76"
+      "bytes": 80720,
+      "sha256": "c913e11be78fa519224b3ab5b6aba35e23a0569cc714a68d39d00b8de05c599e"
     },
     {
       "path": "app/desktop/completion-notifications.mjs",
@@ -48,8 +48,8 @@
     },
     {
       "path": "app/desktop/main.mjs",
-      "bytes": 54073,
-      "sha256": "c84feaddd698493cbd4cec0044a7e517d3173a2207d321080e97d2d132918b12"
+      "bytes": 54405,
+      "sha256": "6680e7c4272ab7faae5f17848c36b242d58ba0053054dab0811974618c38c0cf"
     },
     {
       "path": "app/desktop/native-affinity.mjs",
@@ -118,8 +118,8 @@
     },
     {
       "path": "app/desktop/taskbar-attention.mjs",
-      "bytes": 3941,
-      "sha256": "02bd2115c29bfaa84c92f4b305c2a92517490ccfa3f593ba87c48a589fddaaf4"
+      "bytes": 4040,
+      "sha256": "9af73cb717293f1f5429c4f9fabc9c12fa97dcdc133cb11087b5e1200f572ad1"
     },
     {
       "path": "app/desktop/titlebar-keys.mjs",
@@ -658,8 +658,8 @@
     },
     {
       "path": "app/dist/src/markdown-and-tools.js",
-      "bytes": 73395,
-      "sha256": "9e96b14bb795c47d63720b63ace25d51b94c8a0b8d52bddb83c5b5c9b33aa02c"
+      "bytes": 73482,
+      "sha256": "2ed9bb4498a6d29a3ca38c974cc0e0be21bff7a5e59e15d14733fe8354f35fa3"
     },
     {
       "path": "app/dist/src/model-utils.js",
@@ -693,8 +693,8 @@
     },
     {
       "path": "app/dist/styles/chat.css",
-      "bytes": 39623,
-      "sha256": "3749f0d52f5076361168c663b9840c5ee236c925a327c2802e813600ade73ab6"
+      "bytes": 42360,
+      "sha256": "74885c1974bdc0b3113c33eb3037a5cfdd411dc99c05816586e89c6beb59ed46"
     },
     {
       "path": "app/dist/styles/composer.css",
@@ -779,7 +779,7 @@
     {
       "path": "app/package.json",
       "bytes": 889,
-      "sha256": "f9d45fe690f97bebe4fcc51891ca1d9f2c5f8d4daa590eb527670cff883eaae5"
+      "sha256": "ad5234db1a0dced341dccd9f09af07eac39497d14f9cef9385bd2c5bd6b11674"
     },
     {
       "path": "app/remote/device-store.mjs",
@@ -798,8 +798,8 @@
     },
     {
       "path": "app/server/app.mjs",
-      "bytes": 185938,
-      "sha256": "2a6d0c2e7ded644945367b6737a219b68c086034d5c2318a2994d47afa6fbef3"
+      "bytes": 186200,
+      "sha256": "27bd0148c64640598a1ced7698d0c9837d43a74006bd7714a8a75c5fc336ee82"
     },
     {
       "path": "app/server/assistant-persona.mjs",
@@ -1008,8 +1008,8 @@
     },
     {
       "path": "app/server/questions.mjs",
-      "bytes": 4252,
-      "sha256": "b127afe553300aa87821cb8ed0ca42c5260bfc89a853e5fe611c05588ca49d90"
+      "bytes": 4301,
+      "sha256": "de727fc11d890f6cc9e77bf46097a73f2467b2c988692b6fda57e65cdfdb7964"
     },
     {
       "path": "app/server/read-guard.mjs",
@@ -1043,8 +1043,8 @@
     },
     {
       "path": "app/server/team-configurations.mjs",
-      "bytes": 4706,
-      "sha256": "f31c28abcfee8747dbb30640a622e6e3d7044e7f34ee6b673178537f0c22dfe1"
+      "bytes": 4725,
+      "sha256": "4cb4b78d8fabcd0eeb0827fb5554e980a199b2380a8dee90178cfd27559c58b8"
     },
     {
       "path": "app/server/teams.mjs",
@@ -1058,8 +1058,8 @@
     },
     {
       "path": "app/server/tools.mjs",
-      "bytes": 89066,
-      "sha256": "6f088cc455b0c3ff06919f98a6d21e5d2a57e46869865430aea8d504b49791ed"
+      "bytes": 89092,
+      "sha256": "6248a9a64b539248c66d06119b25c3b8d7df53651d8c7dc31868966b6c30511f"
     },
     {
       "path": "app/server/usage-stats.mjs",
@@ -1130,6 +1130,26 @@
       "path": "app/THIRD-PARTY-NOTICES.md",
       "bytes": 9151,
       "sha256": "07b1d58bfccf50b6be502b3a1dd9059cb2048b21d78243c7c255f82f4a6db79b"
+    },
+    {
+      "path": "app/desktop/taskbar-waiting.png",
+      "bytes": 226,
+      "sha256": "033f439e6d696f7d6f7763de224314a4dad7b1b8dfdb212a709ce7d0565b59a0"
+    },
+    {
+      "path": "app/desktop/windows-zoom.mjs",
+      "bytes": 770,
+      "sha256": "3c8ae5159ed8087ee1e34e95b5873014a3b9c85be4fb7861aacdb955f43f5996"
+    },
+    {
+      "path": "app/dist/src/selectable-table.js",
+      "bytes": 8273,
+      "sha256": "4f891db266fd7e1f05d10c5b403bbc665a0230c8785cb26bf739ca59cc622bc8"
+    },
+    {
+      "path": "app/server/pending-user-actions.mjs",
+      "bytes": 965,
+      "sha256": "f9d04067672c31b6ee3a2d527495e14df1d4f49f6fa899c40c3f962c9b8449b2"
     }
   ]
 }

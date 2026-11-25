@@ -16,7 +16,7 @@ export function normalizeQuestionAnswer(answer) {
 }
 
 export class QuestionManager {
-  pending = new Map();
+  constructor({ pending = new Map() } = {}) { this.pending = pending; }
 
   async ask({ question, options, sessionId, assistant, signal, emit, save }) {
     const input = normalizeQuestionArgs({ question, ...(options === undefined ? {} : { options }) });

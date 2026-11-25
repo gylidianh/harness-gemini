@@ -1,19 +1,18 @@
-// 1.5.2/1.5.3: Windows' flash + error-progress states paint the taskbar button both as a
-// highlighted (flashing) tile and with a red underline. This is an unread-message signal,
-// NOT a task failure, and is independent of the toast setting.
+// A pending user action and an unread completion are independent. In the background,
+// show the blue overlay first; a deferred completion still gets its original red underline.
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const valid = value => value && UUID.test(value.sessionId ?? '') && UUID.test(value.messageId ?? '')
   && ['chat', 'agent', 'image'].includes(value.mode) && ['done', 'error'].includes(value.status);
 
-export function createTaskbarAttention({ getWindow, isSuppressed = () => false, platform = process.platform }) {
+export function createTaskbarAttention({ getWindow, waitingIcon, isSuppressed = () => false, platform = process.platform }) {
   const seen = new Set();
   let unread = false;
+  let waiting = false;
   let disposed = false;
   let attached;
-  // Tracked separately: the underline and the flashing highlight are different OS states and
-  // one of them may already be in the wanted state when the other is not.
   let painted = false;
   let flashed = false;
+  let badged = false;
   const listeners = [];
   function currentWindow() {
     try {
@@ -24,42 +23,37 @@ export function createTaskbarAttention({ getWindow, isSuppressed = () => false, 
   function foreground(window) {
     return window.isVisible() && !window.isMinimized() && window.isFocused();
   }
-  /** Never steals focus: the tile flashes so the user can see it, the window stays where it is. */
-  function paint(window, red) {
+  /** Neither indicator activates the window. Keep the native states independent and idempotent. */
+  function paint(window, blue, red) {
     if (!window || platform !== 'win32') return;
-    try {
-      if (painted !== red) {
-        window.setProgressBar(red ? 1 : -1, red ? { mode: 'error' } : undefined);
-        painted = red;
-      }
-      if (flashed !== red) {
-        window.flashFrame(red);
-        flashed = red;
-      }
-    } catch { /* Destroyed window / unsupported shell: never interrupt a completion. */ }
+    if (painted !== red) {
+      try { window.setProgressBar(red ? 1 : -1, red ? { mode: 'error' } : undefined); painted = red; } catch { /* Best effort. */ }
+    }
+    if (flashed !== red) {
+      try { window.flashFrame(red); flashed = red; } catch { /* Best effort. */ }
+    }
+    if (badged !== blue) {
+      try { window.setOverlayIcon(blue ? waitingIcon : null, blue ? '等待你的操作' : ''); badged = blue; } catch { /* Best effort. */ }
+    }
   }
   function detach() {
     for (const remove of listeners.splice(0)) remove();
-    const window = currentWindow();
-    if (window === attached) paint(window, false);
+    if (attached && !attached.isDestroyed()) paint(attached, false, false);
     attached = undefined;
-    painted = false;
-    flashed = false;
+    painted = flashed = badged = false;
   }
   function attach() {
     const window = currentWindow();
-    if (disposed || window === attached) return;
+    if (disposed || platform !== 'win32' || window === attached) return;
     detach();
     if (!window) return;
     attached = window;
     const refreshAfterEvent = () => {
       refresh();
-      // Some native show/restore events precede the state transition.
+      // Some native window events precede the corresponding state transition.
       queueMicrotask(() => { if (!disposed && attached === window) refresh(); });
     };
-    // Windows stops flashing on its own once the window is focused, but the underline is ours
-    // to remove, so every path back to the foreground is checked here.
-    for (const event of ['focus', 'show', 'restore']) {
+    for (const event of ['focus', 'blur', 'show', 'hide', 'restore', 'minimize']) {
       window.on(event, refreshAfterEvent);
       listeners.push(() => window.off(event, refreshAfterEvent));
     }
@@ -73,11 +67,19 @@ export function createTaskbarAttention({ getWindow, isSuppressed = () => false, 
     const window = currentWindow();
     if (!window) return false;
     try {
-      if (isSuppressed()) return false;
-      if (foreground(window)) unread = false;
-      paint(window, unread);
-      return unread;
+      // Don't acknowledge an unread completion merely because a modal quit dialog is open.
+      if (isSuppressed()) { paint(window, false, false); return false; }
+      const background = !foreground(window);
+      if (!background) unread = false;
+      paint(window, background && waiting, background && !waiting && unread);
+      return background && (waiting || unread);
     } catch { return false; }
+  }
+  function setWaiting(value) {
+    if (disposed || platform !== 'win32' || typeof value !== 'boolean') return false;
+    waiting = value;
+    attach();
+    return refresh();
   }
   function notify(completion) {
     if (disposed || platform !== 'win32' || !valid(completion)) return false;
@@ -85,18 +87,16 @@ export function createTaskbarAttention({ getWindow, isSuppressed = () => false, 
     if (seen.has(id)) return false;
     seen.add(id);
     if (seen.size > 512) seen.delete(seen.values().next().value);
-    // A completion can arrive before the window exists or while a quit dialog is open.
-    // Retain it until attach/refresh; do not depend on the OS delivering a toast.
     unread = true;
     attach();
     return refresh();
   }
   function dispose() {
     if (disposed) return;
-    unread = false;
+    waiting = unread = false;
     detach();
     seen.clear();
     disposed = true;
   }
-  return { notify, attach, refresh, dispose };
+  return { notify, setWaiting, attach, refresh, dispose };
 }

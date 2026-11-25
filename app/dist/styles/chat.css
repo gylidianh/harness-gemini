@@ -2189,3 +2189,13 @@ button.subagent-reasoning-label:hover {
   user-select: text;
   overflow: auto;
 }
+
+
+/* Spreadsheet selection for Markdown answers. */
+.hg-answer-table { max-width:100%; margin:15px 0; }
+.hg-sheet-scroll { overflow-x:auto; }
+.markdown-body .hg-sheet-scroll table { display:table; margin:0; }
+.markdown-body .hg-sheet-scroll table:focus:not(:focus-visible) { outline:none; }
+.markdown-body .hg-sheet-scroll [data-hg-picked] { background:var(--accent-tonal-strong,#cce4ff); box-shadow:inset 0 0 0 1px var(--accent); }
+
+.hg-sheet-scroll [data-hg-text], .hg-sheet-scroll [data-hg-text] * { user-select:text; cursor:text; }

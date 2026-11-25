@@ -9,6 +9,7 @@ import { createEmbeddedBrowser } from './browser.mjs';
 import { installContextMenu } from './context-menu.mjs';
 import { createDesktopPet } from './pet.mjs';
 import { createTitleBarKeys } from './titlebar-keys.mjs';
+import { handleWindowsZoomIn } from './windows-zoom.mjs';
 import { createRemoteSettings } from './remote-settings.mjs';
 
 /** One channel for every remote-connection action; the action name travels in the payload. */
@@ -148,6 +149,7 @@ function installTitleBarWindowState(window) {
   window.on('focus', () => { decide.reset(); report(true); });
   window.on('blur', () => { decide.reset(); report(false); });
   contents.on('before-input-event', (event, input) => {
+    if (handleWindowsZoomIn(event, input, contents)) return;
     const action = decide(input, { labels: titleBarMenus().map(item => String(item.label)), fromPage: true });
     if (!action) return;
     event.preventDefault();
@@ -474,6 +476,7 @@ async function launch() {
     } catch { notificationProtocol = null; }
   }
   taskbarAttention = createTaskbarAttention({
+    waitingIcon: process.platform === 'win32' ? nativeImage.createFromPath(path.join(app.getAppPath(), 'desktop', 'taskbar-waiting.png')) : null,
     getWindow: () => mainWindow,
     isSuppressed: () => Boolean(flags.smokeTest || quitConfirmationOpen || quitting || finalExit),
   });
@@ -555,7 +558,7 @@ async function launch() {
     taskbarAttention.notify(completion);
     completionNotifications.notify(completion);
     desktopPet?.onRunFinished(completion);
-  }, secrets, authorizeBrowserNavigation: async (url, access) => {
+  }, onWaitingForUser: waiting => taskbarAttention.setWaiting(waiting), secrets, authorizeBrowserNavigation: async (url, access) => {
     if (!embeddedBrowser) throw new Error('内置浏览器尚未准备好，请稍后重试。');
     await embeddedBrowser.authorizeToolNavigation(url, access);
   } });

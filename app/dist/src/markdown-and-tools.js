@@ -47,6 +47,7 @@ import {
   X,
   Zap,
 } from '../vendor/vendor-deps.js';
+import { SelectableTable } from './selectable-table.js';
 import { createReplyUI, localImageUrl } from '../reply-ui.js';
 import { createBranchUI } from '../branch-ui.js';
 import {
@@ -1955,6 +1956,7 @@ export function MarkdownBody({
 }) {
   const components = React.useMemo(
     () => ({
+      table: SelectableTable,
       pre: ({ children }) => jsx(CodeBlockPre, { onToast, children }),
       p: ({ node, children }) =>
         containsImgElement(node)

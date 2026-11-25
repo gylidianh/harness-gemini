@@ -5,6 +5,7 @@
 // Apache-2.0: see third-party/ZCode-LICENSE.txt and ZCode-NOTICE.md.
 import { defaultPresentation, normalizePresentation, readPresentation, savePresentation, validLogicalViewport } from './browser-presentation.mjs';
 import { installContextMenu } from './context-menu.mjs';
+import { handleWindowsZoomIn } from './windows-zoom.mjs';
 import { createDebuggerSession } from './debugger-session.mjs';
 import { randomUUID } from 'node:crypto';
 import fs from 'node:fs';
@@ -655,7 +656,9 @@ export function createEmbeddedBrowser({ window, appOrigin, WebContentsView, View
     // 1.3.0: Alt/F10 reach the app's menu row from a focused page too, but never the keys the
     // agent itself sends while it operates the page.
     if (typeof onBeforeInput === 'function') {
-      contents.on('before-input-event', (event, input) => { if (!tab.automating) onBeforeInput(event, input); });
+      contents.on('before-input-event', (event, input) => {
+        if (!tab.automating && !handleWindowsZoomIn(event, input, contents)) onBeforeInput(event, input);
+      });
       // fix3 (#18): before-input-event carries keys only, so a click or a wheel turn with Alt held
       // inside a page never told the title-bar logic that Alt was a modifier; releasing Alt then
       // moved focus to the 文件 menu. Pointer input is reported through input-event instead.
