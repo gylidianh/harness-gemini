@@ -5,15 +5,16 @@ Windows 桌面 AI 工作台，在一个窗口中聊天、编程、生图和浏�
 [![版本](https://img.shields.io/github/v/release/gylidianh/harness-gemini)](https://github.com/gylidianh/harness-gemini/releases/latest)
 ![Windows x64](https://img.shields.io/badge/Windows-10%20%2F%2011%20x64-0078d4)
 
-**[下载 2.0.4 安装包](https://github.com/gylidianh/harness-gemini/releases/download/v2.0.4/Harness-Gemini-2.0.4-win-x64.exe)** · **[浏览源码](app/)** · [版本说明](CHANGELOG.md) · [使用指南](docs/usage.md) · [开发说明](docs/development.md) · [常见问题](docs/faq.md)
+**[下载 2.0.5 安装包](https://github.com/gylidianh/harness-gemini/releases/download/v2.0.5/Harness-Gemini-2.0.5-win-x64.exe)** · **[浏览源码](app/)** · [版本说明](CHANGELOG.md) · [使用指南](docs/usage.md) · [开发说明](docs/development.md) · [常见问题](docs/faq.md)
 
 ![Harness Gemini 1.4.4 主界面](docs/images/home-1.4.4.png)
 
-## 2.0.4 更新
+## 2.0.5 更新
 
-- 推理等级扩展为完整 5 档（`minimal` 极低、`low` 低、`medium` 中、`high` 高、`xhigh` 超高），按模型实际能力精确区分支持范围，越界档位自动钳位并在界面明示。
-- 完善 Gemini / OpenAI / Anthropic 多协议线上传参、拒参识别、原生写法与降级回退链，并扩展 `xhigh` 首字超时窗口至 600 秒与 Anthropic `xhigh` 默认 `max_tokens` 至 64K。
-- 保留 Gemini 3/4 OpenAI 兼容工具调用的 `extra_content.google.thought_signature`，修复切换极低/超高提示文案及流式输出覆盖回退提示的问题。
+- 手机远程新增**会话正文阅读**：点击「会话」列表或「待办 → 进行中」卡片中的「查看正文」，即可直接查看历史消息与正在生成的回复正文，并支持加载更早消息、展开长文、按需查看思考过程、停止生成及底部直接追问。
+- 采用零协议破坏的分片传输方案：严格保持 8 KiB 明文 / 12 KiB 信封上限不变（已部署的 VPS 中继 `server.mjs` 与 `relay-protocol.mjs` 无需修改），单帧预留约 300B 包裹空间、按真实 UTF-8 JSON 字节预算切片并在 Unicode 码点边界对齐，不截断 emoji 与代理对。
+- 生成中的回复每 2.5 秒自动增量追尾，不重复传输已读正文；仅投影正文与精简工具状态摘要，不暴露工具原始输出、参数、密钥或附件二进制；内置转义安全 Markdown 渲染。
+- 使用自建 VPS 中继时，只需更新 `relay-server/phone.html` 并刷新手机页面；免服务器直连（局域网 / Cloudflare 隧道）升级桌面端后直接生效。
 
 ## 功能
 
@@ -87,7 +88,7 @@ Windows 桌面 AI 工作台，在一个窗口中聊天、编程、生图和浏�
 
 ## 源码范围
 
-[app/](app/) 包含 2.0.4 的桌面端、服务端、手机页和前端源码；[app/ui/](app/ui/) 可重新生成界面。自建中继见 [relay-server/](relay-server/)。
+[app/](app/) 包含 2.0.5 的桌面端、服务端、手机页和前端源码；[app/ui/](app/ui/) 可重新生成界面。自建中继见 [relay-server/](relay-server/)。
 
 ## 贡献者
 

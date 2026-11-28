@@ -39,7 +39,7 @@ const MODE_TEXT = {
   relay: '自建中继',
 };
 
-const SCOPE_NOTE = '手机上能做的只有：看待批准的调用、批准或拒绝、回答提问、停止任务。';
+const SCOPE_NOTE = '手机上可查看会话正文、看待批准的调用、批准或拒绝、回答提问、停止任务。';
 
 /** Loads the panel stylesheet once; index.html stays untouched. */
 function ensureStylesheet() {

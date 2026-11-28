@@ -150,6 +150,69 @@
   }
   #toast.show{opacity:1;transform:translate(-50%,0)}
   @media (prefers-color-scheme: dark){ #toast{background:#2a3140} }
+  /* ---------- 会话正文阅读 ---------- */
+  .btn-sm{min-height:34px;padding:0 11px;font-size:12.5px;border-radius:10px;flex:none}
+  .reader-bar{padding:12px 14px;margin-bottom:10px}
+  .reader-bar-top{display:flex;align-items:center;gap:10px}
+  .reader-meta{flex:1;min-width:0}
+  .reader-meta .s{font-size:11.5px;color:var(--muted);margin-top:2px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .reader-bar-actions{display:flex;gap:8px;margin-top:10px}
+  .msg-list{display:flex;flex-direction:column;gap:10px}
+  .msg-card{
+    background:var(--card);border:1px solid var(--line);border-radius:var(--radius);
+    padding:12px 14px;box-shadow:var(--shadow);
+  }
+  .msg-card.user{
+    background:color-mix(in srgb,var(--accent) 8%,var(--card));
+    border-color:color-mix(in srgb,var(--accent) 26%,var(--line));
+  }
+  .msg-head{display:flex;align-items:center;gap:8px;margin-bottom:8px;font-size:12px;color:var(--muted)}
+  .msg-role{font-weight:650;color:var(--fg)}
+  .msg-card.user .msg-role{color:var(--accent)}
+  .msg-time{margin-left:auto;font-size:11px;color:var(--muted)}
+  .msg-body{font-size:14.5px;line-height:1.65;word-break:break-word;overflow-wrap:anywhere}
+  .md-p{margin:0 0 8px;white-space:pre-wrap}
+  .md-p:last-child{margin-bottom:0}
+  .md-h{font-weight:650;font-size:15px;margin:10px 0 6px;line-height:1.4}
+  .md-h:first-child{margin-top:0}
+  .md-list{margin:4px 0 8px;padding-left:20px}
+  .md-list li{margin:3px 0;white-space:pre-wrap}
+  .md-pre{
+    margin:8px 0;padding:10px 12px;border-radius:11px;background:var(--chip);
+    font:12.5px/1.5 ui-monospace,SFMono-Regular,Consolas,monospace;
+    overflow-x:auto;white-space:pre;
+  }
+  .md-lang{font-size:10.5px;color:var(--muted);margin-bottom:4px;user-select:none}
+  .md-code{
+    padding:1px 5px;border-radius:6px;background:var(--chip);
+    font:12.5px ui-monospace,SFMono-Regular,Consolas,monospace;
+  }
+  .md-img-note{
+    display:inline-flex;align-items:center;gap:4px;padding:2px 8px;border-radius:8px;
+    background:var(--chip);color:var(--muted);font-size:12px;vertical-align:middle;
+  }
+  .msg-tools{display:flex;flex-wrap:wrap;gap:6px;margin-top:8px}
+  .msg-tool{
+    font:500 11px/1.2 ui-monospace,SFMono-Regular,Consolas,monospace;
+    padding:4px 7px;border-radius:7px;background:var(--chip);color:var(--muted);
+  }
+  .msg-tool.run{background:color-mix(in srgb,var(--accent) 14%,transparent);color:var(--accent)}
+  .msg-tool.err{background:color-mix(in srgb,var(--danger) 14%,transparent);color:var(--danger)}
+  .msg-reasoning{margin-bottom:8px;border:1px solid var(--line);border-radius:11px;padding:7px 10px;background:var(--bg)}
+  .msg-reasoning summary{cursor:pointer;font-size:12px;color:var(--muted);font-weight:550;user-select:none}
+  .msg-reasoning-body{
+    margin-top:8px;font-size:12.5px;line-height:1.55;color:var(--muted);
+    white-space:pre-wrap;word-break:break-word;max-height:260px;overflow:auto;
+  }
+  .msg-more{display:flex;flex-wrap:wrap;align-items:center;gap:8px;margin-top:10px;padding-top:8px;border-top:1px dashed var(--line)}
+  .msg-more .muted{font-size:12px;flex:1;min-width:120px}
+  .msg-note{margin-top:8px;padding:7px 10px;border-radius:10px;background:var(--chip);color:var(--muted);font-size:12px;white-space:pre-wrap}
+  .msg-err{margin-top:8px;padding:7px 10px;border-radius:10px;background:color-mix(in srgb,var(--danger) 12%,transparent);color:var(--danger);font-size:12.5px;white-space:pre-wrap}
+  .reader-compose{margin-top:12px;padding:12px}
+  .reader-compose textarea{min-height:64px;padding:9px 11px;font-size:14px}
+  .reader-compose-foot{display:flex;gap:8px;margin-top:8px;align-items:center}
+  .reader-compose-foot select{width:auto;min-width:86px;padding:8px 10px;font-size:13px}
+  .reader-compose-foot .btn{min-height:38px}
 </style>
 </head>
 <body>
@@ -201,7 +264,40 @@
       <div class="card" style="padding:4px 14px">
         <div id="sessionList"><div class="empty">暂无会话</div></div>
       </div>
-      <div class="muted" style="text-align:center;margin-top:6px">点会话可选中用于派任务</div>
+      <div class="muted" style="text-align:center;margin-top:6px">点会话查看正文内容，也可直接追问</div>
+    </section>
+
+    <!-- 会话正文 -->
+    <section class="view" id="view-reader">
+      <div class="card reader-bar">
+        <div class="reader-bar-top">
+          <button class="btn btn-sm" id="readerBackBtn">← 返回</button>
+          <div class="reader-meta">
+            <div class="card-title" id="readerTitle">会话正文</div>
+            <div class="s" id="readerSub">正在读取…</div>
+          </div>
+          <span class="tag" id="readerStateTag">空闲</span>
+        </div>
+        <div class="reader-bar-actions">
+          <button class="btn btn-sm" id="readerRefreshBtn">刷新正文</button>
+          <button class="btn btn-sm btn-danger hide" id="readerStopBtn">停止生成</button>
+        </div>
+      </div>
+      <button class="btn btn-block btn-ghost hide" id="readerOlderBtn" style="margin-bottom:10px">加载更早消息</button>
+      <div class="err hide" id="readerError" style="margin-bottom:10px"></div>
+      <div class="empty hide" id="readerEmpty">这个会话还没有消息</div>
+      <div id="readerMessages" class="msg-list"></div>
+      <div class="card reader-compose" id="readerCompose">
+        <textarea id="readerInput" rows="2" placeholder="在这个会话里继续发消息…"></textarea>
+        <div class="reader-compose-foot">
+          <select id="readerMode" aria-label="模式">
+            <option value="chat">聊天</option>
+            <option value="agent">代理</option>
+          </select>
+          <button class="btn btn-primary" id="readerSendBtn">发送</button>
+        </div>
+        <div class="err hide" id="readerSendError"></div>
+      </div>
     </section>
 
     <!-- 任务 -->
@@ -325,8 +421,27 @@ function connectionError(error) {
   $('connectionError').classList.toggle('hide', !error);
   if (error) setDot('bad');
 }
+const READER_POLL_MS = 2_500;
+const READER_MAX_AUTO_CHUNKS = 12;
+const reader = {
+  sessionId: '',
+  returnTab: 'sessions',
+  title: '',
+  running: false,
+  totalMessages: 0,
+  startIndex: 0,
+  hasMoreBefore: false,
+  messages: [],
+  epoch: 0,
+  timer: 0,
+  polling: false,
+  loadingOlder: false,
+};
+const readerNodes = new Map();
+
 function stopConnection() {
   generation += 1;
+  resetReader();
   renderTeamConfigurations([]);
   renderQuestions([]); answeredQuestions.clear();
   clearTimeout(pollTimer); pollTimer = 0; pollFlight = null;
@@ -435,8 +550,10 @@ async function detectTransport() {
 
 // ---------- 标签页 ----------
 function setTab(name) {
+  if (name !== 'reader') closeReader();
   for (const view of document.querySelectorAll('.view')) view.classList.toggle('active', view.id === `view-${name}`);
-  for (const button of $('tabs').querySelectorAll('button')) button.classList.toggle('on', button.dataset.tab === name);
+  const highlight = name === 'reader' ? reader.returnTab : name;
+  for (const button of $('tabs').querySelectorAll('button')) button.classList.toggle('on', button.dataset.tab === highlight);
   if (name === 'sessions') void refreshSessions();
   if (name === 'settings') void refreshNotifyState();
   window.scrollTo({ top: 0 });
@@ -575,8 +692,9 @@ function expectResult(envelope, action) {
   pending.set(envelope.id, waiter);
   timers.push(setTimeout(() => {
     if (!pending.has(envelope.id)) return;
-    say(['pending.list', 'sessions.list'].includes(action) ? '电脑没有回应，正在重试…' : '正在等待电脑确认，请勿重复提交。');
-    if (['pending.list', 'sessions.list'].includes(action)) void postEnvelope(envelope).catch(() => {});
+    const isRead = ['pending.list', 'sessions.list', 'session.messages', 'session.message.read'].includes(action);
+    say(isRead ? '电脑没有回应，正在重试…' : '正在等待电脑确认，请勿重复提交。');
+    if (isRead) void postEnvelope(envelope).catch(() => {});
   }, INVOKE_RETRY_MS));
   timers.push(setTimeout(() => {
     if (!pending.has(envelope.id)) return;
@@ -855,7 +973,11 @@ function render(next) {
         <span class="card-title">${escapeHtml(item.title || '会话')}</span>
       </div>
       ${item.activity ? `<div class="reason" style="margin-top:0">正在 ${escapeHtml(item.activity)}</div>` : ''}
-      <div class="actions"><button class="btn btn-danger btn-block" data-stop>停止任务</button></div>`);
+      <div class="actions">
+        <button class="btn" data-open>查看正文</button>
+        <button class="btn btn-danger" data-stop>停止任务</button>
+      </div>`);
+    node.querySelector('[data-open]').onclick = () => openSessionReader(item.sessionId, item.title || '会话', 'pending');
     node.querySelector('[data-stop]').onclick = async () => {
       node.style.opacity = '0.6';
       try { await invoke('run.stop', { sessionId: item.sessionId }); node.remove(); toast('已停止'); }
@@ -863,6 +985,15 @@ function render(next) {
     };
     return node;
   }));
+
+  if (reader.sessionId) {
+    const isNowLive = live.some(item => item.sessionId === reader.sessionId);
+    if (isNowLive && !reader.running) {
+      reader.running = true;
+      updateReaderHeader();
+      scheduleReaderPoll(200);
+    }
+  }
 }
 
 async function decide(item, approved, node) {
@@ -1024,11 +1155,11 @@ function renderSessions() {
     row.className = 'list-item';
     row.innerHTML = `<div class="grow"><div class="t">${escapeHtml(item.title || '新对话')}</div>
       <div class="s">${item.busy ? '进行中' : '空闲'} · ${escapeHtml((item.updatedAt || '').slice(0, 16).replace('T', ' '))}</div></div>
-      <span class="tag ${item.busy ? 'run' : ''}">${item.busy ? '运行中' : '可选'}</span>`;
+      <span class="tag ${item.busy ? 'run' : ''}">${item.busy ? '运行中 ›' : '查看 ›'}</span>`;
     row.onclick = () => {
       select.value = item.sessionId;
       $('dispatchHint').textContent = `已选中「${item.title || '新对话'}」`;
-      setTab('tasks');
+      openSessionReader(item.sessionId, item.title || '新对话', 'sessions');
     };
     return row;
   }));
@@ -1066,13 +1197,585 @@ async function refreshSessions() {
   }
 }
 
+// ---------- 会话正文阅读 ----------
+function formatInlineMarkdown(escapedLine) {
+  const placeholders = [];
+  let text = escapedLine.replace(/!\[[^\]]*\]\(\/api\/artifacts\/[^)]+\)|\/api\/artifacts\/[a-f0-9-]+\.(?:png|jpg|webp|gif)/gi, () => {
+    const token = `\u0000IMG${placeholders.length}\u0000`;
+    placeholders.push('<span class="md-img-note">图片附件 · 请在电脑端查看</span>');
+    return token;
+  });
+  text = text.replace(/`([^`\n]+)`/g, (_, code) => {
+    const token = `\u0000CODE${placeholders.length}\u0000`;
+    placeholders.push(`<code class="md-code">${code}</code>`);
+    return token;
+  });
+  text = text.replace(/\*\*([^*\n]+)\*\*/g, '<strong>$1</strong>');
+  return text.replace(/\u0000(?:IMG|CODE)(\d+)\u0000/g, (_, idx) => placeholders[Number(idx)] ?? '');
+}
+
+function renderTextBlocks(rawSegment) {
+  const lines = escapeHtml(rawSegment).split('\n');
+  const html = [];
+  let para = [];
+  let listType = '';
+  let listItems = [];
+
+  const flushPara = () => {
+    if (!para.length) return;
+    html.push(`<p class="md-p">${para.map(formatInlineMarkdown).join('\n')}</p>`);
+    para = [];
+  };
+  const flushList = () => {
+    if (!listItems.length) return;
+    html.push(`<${listType} class="md-list">${listItems.map(item => `<li>${formatInlineMarkdown(item)}</li>`).join('')}</${listType}>`);
+    listItems = [];
+    listType = '';
+  };
+
+  for (const line of lines) {
+    const heading = /^#{1,4}\s+(.+)$/.exec(line);
+    const bullet = /^\s*[-*•]\s+(.+)$/.exec(line);
+    const ordered = /^\s*\d+\.\s+(.+)$/.exec(line);
+    if (!line.trim()) {
+      flushPara();
+      flushList();
+    } else if (heading) {
+      flushPara();
+      flushList();
+      html.push(`<div class="md-h">${formatInlineMarkdown(heading[1])}</div>`);
+    } else if (bullet) {
+      flushPara();
+      if (listType && listType !== 'ul') flushList();
+      listType = 'ul';
+      listItems.push(bullet[1]);
+    } else if (ordered) {
+      flushPara();
+      if (listType && listType !== 'ol') flushList();
+      listType = 'ol';
+      listItems.push(ordered[1]);
+    } else {
+      flushList();
+      para.push(line);
+    }
+  }
+  flushPara();
+  flushList();
+  return html.join('');
+}
+
+function renderMarkdownSafe(raw) {
+  const source = String(raw ?? '').replace(/\r\n?/g, '\n');
+  if (!source.trim()) return '<span class="muted">（暂无文字内容）</span>';
+  const parts = [];
+  const fence = /```([A-Za-z0-9_+#.-]*)\n?([\s\S]*?)```/g;
+  let lastIndex = 0;
+  let match;
+  while ((match = fence.exec(source))) {
+    if (match.index > lastIndex) parts.push(renderTextBlocks(source.slice(lastIndex, match.index)));
+    const lang = match[1] ? `<div class="md-lang">${escapeHtml(match[1])}</div>` : '';
+    const code = match[2].replace(/\n$/, '');
+    parts.push(`<pre class="md-pre">${lang}<code>${escapeHtml(code)}</code></pre>`);
+    lastIndex = fence.lastIndex;
+  }
+  if (lastIndex < source.length) {
+    const tail = source.slice(lastIndex);
+    const openFence = /(?:^|\n)```([A-Za-z0-9_+#.-]*)\n?([\s\S]*)$/.exec(tail);
+    if (openFence) {
+      const before = tail.slice(0, openFence.index);
+      if (before.trim()) parts.push(renderTextBlocks(before));
+      const lang = openFence[1] ? `<div class="md-lang">${escapeHtml(openFence[1])}</div>` : '';
+      parts.push(`<pre class="md-pre">${lang}<code>${escapeHtml(openFence[2])}</code></pre>`);
+    } else {
+      parts.push(renderTextBlocks(tail));
+    }
+  }
+  return parts.join('') || '<span class="muted">（暂无文字内容）</span>';
+}
+
+function resetReader() {
+  reader.epoch += 1;
+  clearTimeout(reader.timer);
+  reader.timer = 0;
+  reader.polling = false;
+  reader.loadingOlder = false;
+  reader.sessionId = '';
+  reader.running = false;
+  reader.totalMessages = 0;
+  reader.startIndex = 0;
+  reader.hasMoreBefore = false;
+  reader.messages = [];
+  readerNodes.clear();
+  $('readerMessages').replaceChildren();
+  $('readerError').textContent = '';
+  $('readerError').classList.add('hide');
+  $('readerSendError').textContent = '';
+  $('readerSendError').classList.add('hide');
+  $('readerOlderBtn').classList.add('hide');
+  $('readerEmpty').classList.add('hide');
+  $('readerStopBtn').classList.add('hide');
+}
+
+function closeReader() {
+  if (!reader.sessionId) return;
+  resetReader();
+}
+
+function normalizeReaderMessage(raw) {
+  return {
+    id: raw.id,
+    index: raw.index,
+    role: raw.role === 'user' ? 'user' : 'assistant',
+    status: raw.status || 'done',
+    createdAt: raw.createdAt || '',
+    text: typeof raw.text === 'string' ? raw.text : '',
+    textLength: Number.isFinite(raw.textLength) ? raw.textLength : (typeof raw.text === 'string' ? raw.text.length : 0),
+    nextOffset: Number.isSafeInteger(raw.nextOffset) ? raw.nextOffset : null,
+    hasReasoning: raw.hasReasoning === true,
+    reasoningLength: Number.isFinite(raw.reasoningLength) ? raw.reasoningLength : 0,
+    reasoningText: '',
+    reasoningNextOffset: 0,
+    reasoningLoaded: false,
+    reasoningLoading: false,
+    tools: Array.isArray(raw.tools) ? raw.tools : [],
+    artifactCount: Number(raw.artifactCount) || 0,
+    attachmentCount: Number(raw.attachmentCount) || 0,
+    error: typeof raw.error === 'string' ? raw.error : '',
+    notice: typeof raw.notice === 'string' ? raw.notice : '',
+    loadingMore: false,
+  };
+}
+
+function updateReaderHeader() {
+  $('readerTitle').textContent = reader.title || '会话正文';
+  const loadedCount = reader.messages.length;
+  const totalCount = reader.totalMessages;
+  $('readerSub').textContent = totalCount > 0
+    ? `已加载 ${loadedCount} / ${totalCount} 条消息${reader.running ? ' · 实时追尾中' : ''}`
+    : (reader.running ? '等待模型输出…' : '暂无消息');
+  const tag = $('readerStateTag');
+  tag.textContent = reader.running ? '生成中' : '空闲';
+  tag.className = `tag ${reader.running ? 'run' : ''}`;
+  $('readerStopBtn').classList.toggle('hide', !reader.running);
+  $('readerOlderBtn').classList.toggle('hide', !reader.hasMoreBefore);
+  $('readerOlderBtn').disabled = reader.loadingOlder;
+  $('readerOlderBtn').textContent = reader.loadingOlder ? '正在加载更早消息…' : `加载更早消息（前面还有 ${reader.startIndex} 条）`;
+  $('readerEmpty').classList.toggle('hide', reader.messages.length > 0 || Boolean($('readerError').textContent));
+}
+
+function isNearBottom() {
+  const doc = document.documentElement;
+  if (!doc) return true;
+  return (window.innerHeight + window.scrollY) >= (doc.scrollHeight - 160);
+}
+
+function scrollReaderToBottom() {
+  const doc = document.documentElement;
+  if (doc) window.scrollTo({ top: doc.scrollHeight });
+}
+
+function buildMessageCard(msg) {
+  const node = document.createElement('div');
+  node.className = `msg-card ${msg.role}`;
+  node.dataset.msgId = msg.id;
+  node.innerHTML = `
+    <div class="msg-head">
+      <span class="msg-role"></span>
+      <span class="tag hide" data-status></span>
+      <span class="msg-time" data-time></span>
+    </div>
+    <details class="msg-reasoning hide" data-reasoning>
+      <summary data-reasoning-summary>思考过程</summary>
+      <div class="msg-reasoning-body" data-reasoning-body></div>
+      <div class="actions hide" data-reasoning-more style="margin-top:8px">
+        <button class="btn btn-sm" data-reasoning-next>继续加载思考</button>
+      </div>
+    </details>
+    <div class="msg-body" data-body></div>
+    <div class="msg-tools hide" data-tools></div>
+    <div class="msg-note hide" data-assets></div>
+    <div class="msg-note hide" data-notice></div>
+    <div class="msg-err hide" data-error></div>
+    <div class="msg-more hide" data-more>
+      <span class="muted" data-more-info></span>
+      <button class="btn btn-sm" data-load-next>继续加载</button>
+      <button class="btn btn-sm btn-primary" data-load-all>展开全文</button>
+    </div>`;
+  node.querySelector('[data-load-next]').onclick = () => void continueMessageChunk(msg, { all: false });
+  node.querySelector('[data-load-all]').onclick = () => void continueMessageChunk(msg, { all: true });
+  const details = node.querySelector('[data-reasoning]');
+  details.addEventListener('toggle', () => {
+    if (details.open && !msg.reasoningLoaded && !msg.reasoningLoading) {
+      void loadReasoningChunk(msg, false);
+    }
+  });
+  node.querySelector('[data-reasoning-next]').onclick = () => void loadReasoningChunk(msg, true);
+  return node;
+}
+
+function syncMessageCard(node, msg) {
+  node.querySelector('.msg-role').textContent = msg.role === 'user' ? '你' : '助手';
+  const statusEl = node.querySelector('[data-status]');
+  const showStatus = msg.role === 'assistant' && msg.status && msg.status !== 'done';
+  statusEl.textContent = MODE_TEXT[msg.status] ?? msg.status;
+  statusEl.className = `tag ${msg.status === 'running' ? 'run' : ''}${showStatus ? '' : ' hide'}`;
+  node.querySelector('[data-time]').textContent = (msg.createdAt || '').slice(5, 16).replace('T', ' ');
+
+  const reasoningEl = node.querySelector('[data-reasoning]');
+  if (msg.hasReasoning) {
+    reasoningEl.classList.remove('hide');
+    node.querySelector('[data-reasoning-summary]').textContent = msg.reasoningLoaded
+      ? `思考过程（${msg.reasoningText.length}/${msg.reasoningLength} 字）`
+      : `查看思考过程（约 ${msg.reasoningLength} 字）`;
+    node.querySelector('[data-reasoning-body]').textContent = msg.reasoningLoading && !msg.reasoningText
+      ? '正在读取思考过程…'
+      : msg.reasoningText;
+    const moreWrap = node.querySelector('[data-reasoning-more]');
+    const moreBtn = node.querySelector('[data-reasoning-next]');
+    const hasMoreReasoning = msg.reasoningLoaded && msg.reasoningNextOffset != null;
+    moreWrap.classList.toggle('hide', !hasMoreReasoning);
+    moreBtn.disabled = msg.reasoningLoading;
+    moreBtn.textContent = msg.reasoningLoading ? '读取中…' : '继续加载思考';
+  } else {
+    reasoningEl.classList.add('hide');
+  }
+
+  const bodyEl = node.querySelector('[data-body]');
+  const bodyHtml = msg.text
+    ? renderMarkdownSafe(msg.text)
+    : (msg.status === 'running' ? '<span class="muted">正在思考或执行工具…</span>' : '<span class="muted">（无正文内容）</span>');
+  if (bodyEl.dataset.rendered !== bodyHtml) {
+    bodyEl.innerHTML = bodyHtml;
+    bodyEl.dataset.rendered = bodyHtml;
+  }
+
+  const toolsEl = node.querySelector('[data-tools]');
+  if (msg.tools.length) {
+    toolsEl.classList.remove('hide');
+    toolsEl.innerHTML = msg.tools.map(tool => {
+      const cls = tool.status === 'running' ? ' run' : tool.status === 'error' ? ' err' : '';
+      const mark = tool.status === 'done' ? '✓' : tool.status === 'running' ? '◌' : tool.status === 'error' ? '!' : '·';
+      return `<span class="msg-tool${cls}">${escapeHtml(tool.name)} ${mark}</span>`;
+    }).join('');
+  } else {
+    toolsEl.classList.add('hide');
+  }
+
+  const assetNotes = [];
+  if (msg.attachmentCount > 0) assetNotes.push(`附带 ${msg.attachmentCount} 个附件`);
+  if (msg.artifactCount > 0) assetNotes.push(`生成 ${msg.artifactCount} 张图片`);
+  const assetsEl = node.querySelector('[data-assets]');
+  if (assetNotes.length) {
+    assetsEl.textContent = `${assetNotes.join(' · ')}（请在电脑端查看原件）`;
+    assetsEl.classList.remove('hide');
+  } else {
+    assetsEl.classList.add('hide');
+  }
+
+  const noticeEl = node.querySelector('[data-notice]');
+  if (msg.notice) {
+    noticeEl.textContent = msg.notice;
+    noticeEl.classList.remove('hide');
+  } else {
+    noticeEl.classList.add('hide');
+  }
+
+  const errEl = node.querySelector('[data-error]');
+  if (msg.error) {
+    errEl.textContent = msg.error;
+    errEl.classList.remove('hide');
+  } else {
+    errEl.classList.add('hide');
+  }
+
+  const moreEl = node.querySelector('[data-more]');
+  if (msg.nextOffset != null) {
+    moreEl.classList.remove('hide');
+    const remain = Math.max(0, msg.textLength - msg.text.length);
+    const pct = msg.textLength > 0 ? Math.min(99, Math.round((msg.text.length / msg.textLength) * 100)) : 0;
+    node.querySelector('[data-more-info]').textContent = `已加载 ${pct}%（剩余约 ${remain} 字）`;
+    const nextBtn = node.querySelector('[data-load-next]');
+    const allBtn = node.querySelector('[data-load-all]');
+    nextBtn.disabled = msg.loadingMore;
+    allBtn.disabled = msg.loadingMore;
+    nextBtn.textContent = msg.loadingMore ? '加载中…' : '继续加载';
+    allBtn.textContent = msg.loadingMore ? '加载中…' : '展开全文';
+  } else {
+    moreEl.classList.add('hide');
+  }
+}
+
+function renderReaderList() {
+  const host = $('readerMessages');
+  const activeIds = new Set(reader.messages.map(msg => msg.id));
+  for (const [id, node] of readerNodes) {
+    if (!activeIds.has(id)) { node.remove(); readerNodes.delete(id); }
+  }
+  const ordered = [];
+  for (const msg of reader.messages) {
+    let node = readerNodes.get(msg.id);
+    if (!node) {
+      node = buildMessageCard(msg);
+      readerNodes.set(msg.id, node);
+    }
+    syncMessageCard(node, msg);
+    ordered.push(node);
+  }
+  host.replaceChildren(...ordered);
+  updateReaderHeader();
+}
+
+function scheduleReaderPoll(delayMs = READER_POLL_MS) {
+  clearTimeout(reader.timer);
+  reader.timer = 0;
+  if (!reader.sessionId || !reader.running || document.hidden || !ready()) return;
+  const epoch = reader.epoch;
+  reader.timer = setTimeout(() => {
+    if (epoch !== reader.epoch) return;
+    void pollReaderLive();
+  }, delayMs);
+}
+
+async function continueMessageChunk(msg, { all = false } = {}) {
+  if (!reader.sessionId || msg.nextOffset == null || msg.loadingMore) return;
+  const epoch = reader.epoch;
+  const connEpoch = generation;
+  msg.loadingMore = true;
+  const node = readerNodes.get(msg.id);
+  if (node) syncMessageCard(node, msg);
+  try {
+    let rounds = 0;
+    const cap = all ? READER_MAX_AUTO_CHUNKS : 1;
+    while (msg.nextOffset != null && rounds < cap) {
+      const data = await invoke('session.message.read', {
+        sessionId: reader.sessionId,
+        messageId: msg.id,
+        offset: msg.nextOffset,
+        field: 'text',
+      });
+      if (epoch !== reader.epoch || connEpoch !== generation) return;
+      if (data.offset === msg.text.length && data.chunk) msg.text += data.chunk;
+      msg.textLength = data.totalLength;
+      msg.nextOffset = data.nextOffset;
+      msg.status = data.status || msg.status;
+      if (Array.isArray(data.tools)) msg.tools = data.tools;
+      if (typeof data.error === 'string') msg.error = data.error;
+      if (typeof data.notice === 'string') msg.notice = data.notice;
+      reader.running = data.running === true;
+      rounds += 1;
+      if (!data.chunk) break;
+    }
+  } catch (error) {
+    if (epoch === reader.epoch && connEpoch === generation) say(error.message);
+  } finally {
+    if (epoch === reader.epoch && connEpoch === generation) {
+      msg.loadingMore = false;
+      const currentNode = readerNodes.get(msg.id);
+      if (currentNode) syncMessageCard(currentNode, msg);
+      updateReaderHeader();
+      if (reader.running) scheduleReaderPoll();
+    }
+  }
+}
+
+async function loadReasoningChunk(msg, append) {
+  if (!reader.sessionId || !msg.hasReasoning || msg.reasoningLoading) return;
+  const epoch = reader.epoch;
+  const connEpoch = generation;
+  const offset = append && msg.reasoningNextOffset != null ? msg.reasoningNextOffset : 0;
+  msg.reasoningLoading = true;
+  const node = readerNodes.get(msg.id);
+  if (node) syncMessageCard(node, msg);
+  try {
+    const data = await invoke('session.message.read', {
+      sessionId: reader.sessionId,
+      messageId: msg.id,
+      offset,
+      field: 'reasoning',
+    });
+    if (epoch !== reader.epoch || connEpoch !== generation) return;
+    if (!append || offset === 0) msg.reasoningText = data.chunk || '';
+    else if (data.offset === msg.reasoningText.length && data.chunk) msg.reasoningText += data.chunk;
+    msg.reasoningLength = data.totalLength;
+    msg.reasoningNextOffset = data.nextOffset;
+    msg.reasoningLoaded = true;
+  } catch (error) {
+    if (epoch === reader.epoch && connEpoch === generation) say(error.message);
+  } finally {
+    if (epoch === reader.epoch && connEpoch === generation) {
+      msg.reasoningLoading = false;
+      const currentNode = readerNodes.get(msg.id);
+      if (currentNode) syncMessageCard(currentNode, msg);
+    }
+  }
+}
+
+async function loadReaderLatest({ scrollBottom = false } = {}) {
+  if (!reader.sessionId || !ready()) return;
+  const epoch = reader.epoch;
+  const connEpoch = generation;
+  $('readerError').textContent = '';
+  $('readerError').classList.add('hide');
+  try {
+    const data = await invoke('session.messages', { sessionId: reader.sessionId });
+    if (epoch !== reader.epoch || connEpoch !== generation) return;
+    reader.title = data.title || reader.title || '会话正文';
+    reader.running = data.running === true;
+    reader.totalMessages = Number(data.totalMessages) || 0;
+    reader.startIndex = Number(data.startIndex) || 0;
+    reader.hasMoreBefore = data.hasMoreBefore === true;
+    const prevById = new Map(reader.messages.map(item => [item.id, item]));
+    reader.messages = (Array.isArray(data.messages) ? data.messages : []).map(raw => {
+      const next = normalizeReaderMessage(raw);
+      const prev = prevById.get(next.id);
+      // Preserve already-expanded long body & loaded reasoning when refreshing the same message.
+      if (prev && prev.text.length > next.text.length && prev.text.startsWith(next.text)) {
+        next.text = prev.text;
+        next.nextOffset = next.text.length < next.textLength ? next.text.length : null;
+      }
+      if (prev && prev.reasoningLoaded) {
+        next.reasoningLoaded = true;
+        next.reasoningText = prev.reasoningText;
+        next.reasoningNextOffset = prev.reasoningNextOffset;
+      }
+      return next;
+    });
+    renderReaderList();
+    if (scrollBottom) scrollReaderToBottom();
+    if (reader.running) scheduleReaderPoll();
+  } catch (error) {
+    if (epoch !== reader.epoch || connEpoch !== generation) return;
+    $('readerError').textContent = error.message;
+    $('readerError').classList.remove('hide');
+    updateReaderHeader();
+  }
+}
+
+async function loadOlderMessages() {
+  if (!reader.sessionId || !reader.hasMoreBefore || reader.loadingOlder || !ready()) return;
+  const epoch = reader.epoch;
+  const connEpoch = generation;
+  reader.loadingOlder = true;
+  updateReaderHeader();
+  try {
+    const data = await invoke('session.messages', {
+      sessionId: reader.sessionId,
+      beforeIndex: reader.startIndex,
+    });
+    if (epoch !== reader.epoch || connEpoch !== generation) return;
+    const existingIds = new Set(reader.messages.map(item => item.id));
+    const older = (Array.isArray(data.messages) ? data.messages : [])
+      .map(normalizeReaderMessage)
+      .filter(item => !existingIds.has(item.id));
+    reader.messages = [...older, ...reader.messages];
+    reader.startIndex = Math.min(reader.startIndex, Number(data.startIndex) || 0);
+    reader.hasMoreBefore = data.hasMoreBefore === true;
+    reader.totalMessages = Math.max(reader.totalMessages, Number(data.totalMessages) || 0);
+    renderReaderList();
+  } catch (error) {
+    if (epoch === reader.epoch && connEpoch === generation) say(error.message);
+  } finally {
+    if (epoch === reader.epoch && connEpoch === generation) {
+      reader.loadingOlder = false;
+      updateReaderHeader();
+    }
+  }
+}
+
+async function pollReaderLive() {
+  if (!reader.sessionId || reader.polling || document.hidden || !ready()) return;
+  const epoch = reader.epoch;
+  const connEpoch = generation;
+  reader.polling = true;
+  clearTimeout(reader.timer);
+  reader.timer = 0;
+  try {
+    const last = reader.messages[reader.messages.length - 1];
+    if (!last || last.role !== 'assistant') {
+      const stick = isNearBottom();
+      await loadReaderLatest({ scrollBottom: stick });
+      return;
+    }
+    const stick = isNearBottom();
+    let rounds = 0;
+    let shouldReloadTail = false;
+    while (rounds < 4) {
+      const data = await invoke('session.message.read', {
+        sessionId: reader.sessionId,
+        messageId: last.id,
+        offset: last.text.length,
+        field: 'text',
+      });
+      if (epoch !== reader.epoch || connEpoch !== generation) return;
+      if (data.offset === last.text.length && data.chunk) last.text += data.chunk;
+      last.textLength = data.totalLength;
+      last.nextOffset = data.nextOffset;
+      last.status = data.status || last.status;
+      last.hasReasoning = data.hasReasoning === true;
+      last.reasoningLength = Number(data.reasoningLength) || 0;
+      if (Array.isArray(data.tools)) last.tools = data.tools;
+      last.artifactCount = Number(data.artifactCount) || 0;
+      last.error = typeof data.error === 'string' ? data.error : '';
+      last.notice = typeof data.notice === 'string' ? data.notice : '';
+      reader.running = data.running === true;
+      if ((Number(data.totalMessages) || 0) > reader.totalMessages || (data.latestMessageId && data.latestMessageId !== last.id)) {
+        shouldReloadTail = true;
+      }
+      rounds += 1;
+      if (!data.hasMore || !data.chunk) break;
+    }
+    const node = readerNodes.get(last.id);
+    if (node) syncMessageCard(node, last);
+    updateReaderHeader();
+    if (stick) scrollReaderToBottom();
+    if (shouldReloadTail) await loadReaderLatest({ scrollBottom: stick });
+  } catch (error) {
+    if (epoch === reader.epoch && connEpoch === generation) {
+      $('readerError').textContent = error.message;
+      $('readerError').classList.remove('hide');
+    }
+  } finally {
+    if (epoch === reader.epoch && connEpoch === generation) {
+      reader.polling = false;
+      if (reader.running) scheduleReaderPoll();
+    }
+  }
+}
+
+async function refreshReader() {
+  if (!reader.sessionId || !ready()) return;
+  if (reader.running && reader.messages.length && reader.messages[reader.messages.length - 1].role === 'assistant') {
+    await pollReaderLive();
+    return;
+  }
+  await loadReaderLatest({ scrollBottom: false });
+}
+
+function openSessionReader(sessionId, titleHint = '', fromTab = 'sessions') {
+  if (!sessionId) return;
+  resetReader();
+  reader.sessionId = sessionId;
+  reader.returnTab = fromTab;
+  reader.title = titleHint || '会话正文';
+  $('readerSub').textContent = '正在读取正文…';
+  $('readerTitle').textContent = reader.title;
+  $('readerSendError').classList.add('hide');
+  setTab('reader');
+  void loadReaderLatest({ scrollBottom: true });
+}
+
 async function refreshAll() {
-  if (directHttp) return refreshDirect(true);
+  if (directHttp) {
+    const task = refreshDirect(true);
+    if (reader.sessionId) void refreshReader();
+    return task;
+  }
   if (!ready()) return;
   const epoch = generation;
   try { const data = await invoke('pending.list', {}); assertGeneration(epoch); render(data); }
   catch (error) { if (epoch === generation) connectionError(error); }
   if (epoch === generation) void refreshSessions();
+  if (epoch === generation && reader.sessionId) void refreshReader();
 }
 
 // One self-scheduled polling loop: slow requests never overlap the next tick.
@@ -1111,8 +1814,9 @@ function refreshDirect(forceSessions = false) {
   return flight;
 }
 document.addEventListener('visibilitychange', () => {
-  if (document.hidden) { clearTimeout(pollTimer); return; }
+  if (document.hidden) { clearTimeout(pollTimer); clearTimeout(reader.timer); reader.timer = 0; return; }
   if (directHttp) void refreshDirect(true);
+  if (reader.sessionId) void refreshReader();
 });
 window.addEventListener('online', () => { if (directHttp) void refreshDirect(true); });
 window.addEventListener('pagehide', () => stopConnection());
@@ -1251,6 +1955,51 @@ $('dispatchBtn').onclick = async () => {
     $('dispatchError').classList.remove('hide');
   } finally {
     $('dispatchBtn').disabled = false;
+  }
+};
+$('readerBackBtn').onclick = () => {
+  const target = reader.returnTab || 'sessions';
+  setTab(target);
+};
+$('readerRefreshBtn').onclick = () => { void refreshReader(); };
+$('readerOlderBtn').onclick = () => { void loadOlderMessages(); };
+$('readerStopBtn').onclick = async () => {
+  if (!reader.sessionId) return;
+  $('readerStopBtn').disabled = true;
+  try {
+    await invoke('run.stop', { sessionId: reader.sessionId });
+    toast('已请求停止');
+    void refreshReader();
+  } catch (error) {
+    say(error.message);
+  } finally {
+    $('readerStopBtn').disabled = false;
+  }
+};
+$('readerSendBtn').onclick = async () => {
+  const text = $('readerInput').value.trim();
+  $('readerSendError').classList.add('hide');
+  if (!text || !reader.sessionId) return;
+  const targetSessionId = reader.sessionId;
+  const epoch = reader.epoch;
+  const connEpoch = generation;
+  $('readerSendBtn').disabled = true;
+  try {
+    await invoke('task.dispatch', { sessionId: targetSessionId, text, mode: $('readerMode').value });
+    if (epoch !== reader.epoch || connEpoch !== generation) return;
+    $('readerInput').value = '';
+    toast('已发送');
+    reader.running = true;
+    updateReaderHeader();
+    scheduleReaderPoll(400);
+    void refreshSessions();
+  } catch (error) {
+    if (epoch === reader.epoch && connEpoch === generation) {
+      $('readerSendError').textContent = error.message;
+      $('readerSendError').classList.remove('hide');
+    }
+  } finally {
+    $('readerSendBtn').disabled = false;
   }
 };
 $('forgetBtn').onclick = async () => {

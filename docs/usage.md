@@ -1,6 +1,6 @@
 # 使用指南
 
-适用于 Harness Gemini 2.0.4。返回 [项目首页](../README.md) · [常见问题](faq.md)
+适用于 Harness Gemini 2.0.5。返回 [项目首页](../README.md) · [常见问题](faq.md)
 
 ## 安装与升级
 
@@ -12,18 +12,18 @@
 
 ### 校验安装包
 
-2.0.4 文件名：`Harness-Gemini-2.0.4-win-x64.exe`。
+2.0.5 文件名：`Harness-Gemini-2.0.5-win-x64.exe`。
 
 在文件所在目录打开 PowerShell，执行：
 
 ```powershell
-Get-FileHash .\Harness-Gemini-2.0.4-win-x64.exe -Algorithm SHA256
+Get-FileHash .\Harness-Gemini-2.0.5-win-x64.exe -Algorithm SHA256
 ```
 
-2.0.4 的 SHA-256 为：
+2.0.5 的 SHA-256 为：
 
 ```text
-2a4c068e67b571efcb63bd5dfc8bb01b26c68eb7717d03b96b8e0bb09d135b61
+3066ff142c22dd9800dadfd2f30aa8679ebabd88e95166857f06186f834373a0
 ```
 
 其他版本请使用对应 Release 附带的 `SHA256SUMS.txt`，不要混用不同版本的校验值。

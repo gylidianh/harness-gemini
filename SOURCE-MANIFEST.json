@@ -1,9 +1,9 @@
 {
-  "version": "2.0.4",
-  "release": "https://github.com/gylidianh/harness-gemini/releases/tag/v2.0.4",
-  "installerSha256": "2a4c068e67b571efcb63bd5dfc8bb01b26c68eb7717d03b96b8e0bb09d135b61",
-  "installerBytes": 128169453,
-  "appArchiveSha256": "a1d8fe5076f2007d5dd0dab046e5e33d39615391af46f53739388a2edb88f682",
+  "version": "2.0.5",
+  "release": "https://github.com/gylidianh/harness-gemini/releases/tag/v2.0.5",
+  "installerSha256": "3066ff142c22dd9800dadfd2f30aa8679ebabd88e95166857f06186f834373a0",
+  "installerBytes": 128176969,
+  "appArchiveSha256": "126150cdf073ba5ec328dcb7c1aa5f927be28f98f3d63488c9d6a043545f264f",
   "scope": "Hashes of corresponding source files. Builder normalizes package.json; other listed files are byte-identical to the installer payload.",
   "files": [
     {
@@ -593,8 +593,8 @@
     },
     {
       "path": "app/dist/remote-settings.js",
-      "bytes": 25942,
-      "sha256": "031eb174f6df792760afaca0e282cbd2810c335d619735bf022024e63ca8d607"
+      "bytes": 25948,
+      "sha256": "c4717a58edd51ab85840952afd8a2291ea9c25fdeb62985d5048945d5481d0f3"
     },
     {
       "path": "app/dist/reply-ui.css",
@@ -779,7 +779,7 @@
     {
       "path": "app/package.json",
       "bytes": 889,
-      "sha256": "2b85a195fb1d5375fce567bc43a53c1012294e531afea5712e2f78b18d5ede0e"
+      "sha256": "579cb2f47783e80c1f802acab8f4dfc6482216e34385af6915ab47a884b706d0"
     },
     {
       "path": "app/remote/device-store.mjs",
@@ -788,8 +788,8 @@
     },
     {
       "path": "app/remote/phone.html",
-      "bytes": 61560,
-      "sha256": "10f12027341d041b761825b78d17483a22897510650e52ef2e59cbcc398eacc8"
+      "bytes": 92132,
+      "sha256": "b202663a79ccf04a1866ee19de8ab1157d5b649ddbe1eb3ca7fe6295da19716b"
     },
     {
       "path": "app/remote/sw.js",
@@ -833,8 +833,8 @@
     },
     {
       "path": "app/server/control-plane.mjs",
-      "bytes": 19217,
-      "sha256": "3238712d780f0364053f1043815a86c569c5562b5c894ac1c70a6e89ade4fdcd"
+      "bytes": 30578,
+      "sha256": "759d9d87d42f9a2156d46ab1b331ed40833bd571266c835c6e21ebb9d1205efe"
     },
     {
       "path": "app/server/downloads.mjs",

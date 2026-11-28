@@ -24,16 +24,27 @@ export const ACTIONS = new Set([
   'run.stop',
   'task.dispatch',
   'sessions.list',
+  'session.messages',
+  'session.message.read',
 ]);
+
+/** Reserve ~300 bytes inside MAX_PLAINTEXT_BYTES (8 KiB) for `{ replyTo, ok, data }` and margin. */
+export const RESPONSE_WRAPPER_RESERVE = 300;
+export const MAX_RESPONSE_DATA_BYTES = MAX_PLAINTEXT_BYTES - RESPONSE_WRAPPER_RESERVE;
 
 /** Deliberately short: whatever a phone shows must fit in one sealed envelope. */
 const LIMITS = Object.freeze({
   sessions: 12,
+  messagesPage: 8,
+  messagesMaxLimit: 12,
+  messageTools: 6,
   approvals: 8,
   questions: 8,
   title: 40,
   reason: 120,
   preview: 200,
+  error: 200,
+  notice: 160,
   question: 400,
   option: 120,
   answer: 4000,
@@ -117,6 +128,124 @@ function runState(run, waiting) {
   if (status === 'error') return 'error';
   if (status === 'done' || run?.finished === true) return 'done';
   return 'running';
+}
+
+function isHighSurrogate(code) {
+  return code >= 0xd800 && code <= 0xdbff;
+}
+
+function isLowSurrogate(code) {
+  return code >= 0xdc00 && code <= 0xdfff;
+}
+
+/** Never cuts through a UTF-16 surrogate pair (e.g. emoji or supplementary CJK). */
+function alignSurrogateBoundary(text, index, min = 0) {
+  if (index > min && index < text.length
+    && isHighSurrogate(text.charCodeAt(index - 1))
+    && isLowSurrogate(text.charCodeAt(index))) {
+    return index - 1;
+  }
+  return index;
+}
+
+/** Preserves newlines, tabs and Markdown while replacing disallowed control chars 1:1. */
+function normalizeBodyText(value) {
+  if (typeof value !== 'string') return '';
+  return value.replace(/[\u0000-\u0008\u000b\u000c\u000e-\u001f\u007f]/gu, ' ');
+}
+
+/**
+ * Slices `text` starting at UTF-16 code-unit `rawOffset` so that `JSON.stringify(slice)` fits
+ * within `maxJsonBytes` UTF-8 bytes without splitting any Unicode code point (surrogate pair).
+ */
+export function sliceTextByJsonBytes(text, rawOffset = 0, maxJsonBytes = 7_500) {
+  const source = typeof text === 'string' ? text : '';
+  const clamped = Math.max(0, Math.min(source.length, Number.isSafeInteger(rawOffset) ? rawOffset : 0));
+  const start = alignSurrogateBoundary(source, clamped, 0);
+  if (start >= source.length || maxJsonBytes < 2) {
+    return { start, end: start, text: '', nextOffset: start < source.length ? start : null };
+  }
+  let hi = alignSurrogateBoundary(source, Math.min(source.length, start + maxJsonBytes - 2), start);
+  const fits = end => Buffer.byteLength(JSON.stringify(source.slice(start, end)), 'utf8') <= maxJsonBytes;
+  if (fits(hi)) {
+    return {
+      start,
+      end: hi,
+      text: source.slice(start, hi),
+      nextOffset: hi < source.length ? hi : null,
+    };
+  }
+  let lo = start;
+  while (lo < hi) {
+    const mid = Math.ceil((lo + hi) / 2);
+    const splitsPair = mid > start && mid < source.length
+      && isHighSurrogate(source.charCodeAt(mid - 1))
+      && isLowSurrogate(source.charCodeAt(mid));
+    if (splitsPair) {
+      const afterPair = mid + 1;
+      if (afterPair <= hi && fits(afterPair)) lo = afterPair;
+      else hi = mid - 1;
+    } else if (fits(mid)) {
+      lo = mid;
+    } else {
+      hi = alignSurrogateBoundary(source, mid - 1, lo);
+    }
+  }
+  const end = lo;
+  return {
+    start,
+    end,
+    text: source.slice(start, end),
+    nextOffset: end < source.length ? end : null,
+  };
+}
+
+function rawMessageText(message) {
+  if (typeof message?.text === 'string') return normalizeBodyText(message.text);
+  if (typeof message?.content === 'string') return normalizeBodyText(message.content);
+  return '';
+}
+
+function rawMessageReasoning(message) {
+  if (message?.role !== 'assistant' || typeof message?.reasoning !== 'string') return '';
+  return normalizeBodyText(message.reasoning);
+}
+
+function compactMessageTools(message) {
+  const list = Array.isArray(message?.tools) ? message.tools : [];
+  return list
+    .slice(-LIMITS.messageTools)
+    .map(tool => ({ name: clip(tool?.name ?? '', 40), status: clip(tool?.status ?? '', 16) }))
+    .filter(item => item.name);
+}
+
+function visibleSessionMessages(session) {
+  const raw = Array.isArray(session?.messages) ? session.messages : [];
+  const out = [];
+  for (const message of raw) {
+    if (!message || typeof message !== 'object') continue;
+    if (message.role !== 'user' && message.role !== 'assistant') continue;
+    const index = out.length;
+    const id = typeof message.id === 'string' && message.id.trim()
+      ? message.id.trim().slice(0, 120)
+      : `msg-${index}`;
+    out.push({ id, index, message });
+  }
+  return out;
+}
+
+function messageMetaFields(message) {
+  const errorText = typeof message?.error === 'string' && message.error.trim() ? clip(message.error, LIMITS.error) : '';
+  const noticeText = typeof message?.notice === 'string' && message.notice.trim() ? clip(message.notice, LIMITS.notice) : '';
+  return {
+    status: clip(message?.status ?? 'done', 20) || 'done',
+    createdAt: typeof message?.createdAt === 'string' ? clip(message.createdAt, 32) : '',
+    tools: compactMessageTools(message),
+    artifactCount: Array.isArray(message?.artifacts) ? message.artifacts.length : 0,
+    attachmentCount: Array.isArray(message?.attachments) ? message.attachments.length : 0,
+    ...(errorText ? { error: errorText } : {}),
+    ...(noticeText ? { notice: noticeText } : {}),
+  };
 }
 
 /**
@@ -383,6 +512,129 @@ export function createControlPlane({
             .filter(item => UUID.test(item.sessionId))
             .slice(0, LIMITS.sessions);
           return { sessions, total: Array.isArray(summaries) ? summaries.length : 0 };
+        }
+
+        case 'session.messages': {
+          // On-demand read of conversation body, byte-budgeted to fit one 8 KiB frame (reserving
+          // ~300 bytes for the result wrapper). Prefer the in-memory live run so streaming text
+          // is immediately visible before the next disk checkpoint.
+          const sessionId = id(input.sessionId, '会话编号');
+          const liveRun = harness.runs instanceof Map ? harness.runs.get(sessionId) : null;
+          let session = liveRun?.session ?? null;
+          if (!session) {
+            if (typeof harness.store?.getSession !== 'function') throw new HttpError(503, '会话内容暂时不可用。');
+            session = await harness.store.getSession(sessionId);
+          }
+          const visible = visibleSessionMessages(session);
+          const rawBefore = input.beforeIndex === undefined || input.beforeIndex === null ? visible.length : input.beforeIndex;
+          if (!Number.isSafeInteger(rawBefore) || rawBefore < 0 || rawBefore > visible.length) {
+            throw new HttpError(400, '分页位置无效。');
+          }
+          const rawLimit = input.limit === undefined || input.limit === null ? LIMITS.messagesPage : input.limit;
+          if (!Number.isSafeInteger(rawLimit) || rawLimit < 1 || rawLimit > LIMITS.messagesMaxLimit) {
+            throw new HttpError(400, `每页消息数必须在 1 到 ${LIMITS.messagesMaxLimit} 之间。`);
+          }
+          const endIndex = rawBefore;
+          const running = Boolean(liveRun && liveRun.finished !== true);
+          const page = {
+            sessionId,
+            title: clip(session?.title ?? '新对话', LIMITS.title) || '新对话',
+            running,
+            totalMessages: visible.length,
+            startIndex: endIndex,
+            endIndex,
+            hasMoreBefore: endIndex > 0,
+            messages: [],
+          };
+          const selected = [];
+          const floor = Math.max(0, endIndex - rawLimit);
+          for (let index = endIndex - 1; index >= floor; index -= 1) {
+            const { id: messageId, message } = visible[index];
+            const fullText = rawMessageText(message);
+            const fullReasoning = rawMessageReasoning(message);
+            const meta = messageMetaFields(message);
+            const entry = {
+              id: messageId,
+              index,
+              role: message.role,
+              ...meta,
+              text: '',
+              textLength: fullText.length,
+              // Use the worst-case integer digit width while measuring the byte budget.
+              nextOffset: fullText.length,
+              hasReasoning: fullReasoning.length > 0,
+              reasoningLength: fullReasoning.length,
+            };
+            const shellBytes = Buffer.byteLength(JSON.stringify({
+              ...page,
+              startIndex: index,
+              hasMoreBefore: index > 0,
+              messages: [entry, ...selected],
+            }), 'utf8');
+            const remaining = MAX_RESPONSE_DATA_BYTES - shellBytes;
+            if (selected.length > 0 && remaining < 240) break;
+            const slice = sliceTextByJsonBytes(fullText, 0, Math.max(2, remaining + 2));
+            if (selected.length > 0 && fullText.length > 0 && slice.text.length === 0) break;
+            // If an earlier message cannot fit a substantial chunk in the leftover room, leave it
+            // for the previous page so it gets a full ~7.5 KiB budget on its own.
+            if (selected.length > 0 && slice.nextOffset !== null && remaining < 1_024) break;
+            entry.text = slice.text;
+            entry.nextOffset = slice.nextOffset;
+            selected.unshift(entry);
+          }
+          page.messages = selected;
+          page.startIndex = selected.length ? selected[0].index : endIndex;
+          page.hasMoreBefore = page.startIndex > 0;
+          return page;
+        }
+
+        case 'session.message.read': {
+          // Continues reading a truncated message or tails a streaming assistant reply from the
+          // phone's current UTF-16 offset, never splitting a Unicode code point (surrogate pair).
+          const sessionId = id(input.sessionId, '会话编号');
+          const messageId = bounded(input.messageId, '消息编号', 120).trim();
+          const offset = input.offset === undefined || input.offset === null ? 0 : input.offset;
+          if (!Number.isSafeInteger(offset) || offset < 0) throw new HttpError(400, '读取偏移量无效。');
+          const field = input.field === undefined || input.field === null ? 'text' : input.field;
+          if (field !== 'text' && field !== 'reasoning') throw new HttpError(400, 'field 必须是 text 或 reasoning。');
+          const liveRun = harness.runs instanceof Map ? harness.runs.get(sessionId) : null;
+          let session = liveRun?.session ?? null;
+          if (!session) {
+            if (typeof harness.store?.getSession !== 'function') throw new HttpError(503, '会话内容暂时不可用。');
+            session = await harness.store.getSession(sessionId);
+          }
+          const visible = visibleSessionMessages(session);
+          const hit = visible.find(item => item.id === messageId);
+          if (!hit) throw new HttpError(404, '找不到这条消息。');
+          const fullText = field === 'reasoning' ? rawMessageReasoning(hit.message) : rawMessageText(hit.message);
+          const fullReasoning = rawMessageReasoning(hit.message);
+          const meta = messageMetaFields(hit.message);
+          const running = Boolean(liveRun && liveRun.finished !== true);
+          const latestMessageId = visible.length ? visible[visible.length - 1].id : null;
+          const payload = {
+            sessionId,
+            messageId,
+            field,
+            offset: fullText.length,
+            chunk: '',
+            nextOffset: fullText.length,
+            totalLength: fullText.length,
+            hasMore: true,
+            running,
+            totalMessages: visible.length,
+            latestMessageId,
+            hasReasoning: fullReasoning.length > 0,
+            reasoningLength: fullReasoning.length,
+            ...meta,
+          };
+          const shellBytes = Buffer.byteLength(JSON.stringify(payload), 'utf8');
+          const remaining = Math.max(0, MAX_RESPONSE_DATA_BYTES - shellBytes);
+          const slice = sliceTextByJsonBytes(fullText, offset, remaining + 2);
+          payload.offset = slice.start;
+          payload.chunk = slice.text;
+          payload.nextOffset = slice.nextOffset;
+          payload.hasMore = slice.nextOffset !== null;
+          return payload;
         }
 
         case 'run.stop': {
