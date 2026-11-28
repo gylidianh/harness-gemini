@@ -1,5 +1,11 @@
 # 更新记录
 
+## 2.0.4 更新
+
+- 推理等级扩展为完整 5 档（`minimal` 极低、`low` 低、`medium` 中、`high` 高、`xhigh` 超高），按模型实际能力区分支持范围，越界档位自动钳位并在界面明示。
+- 完善 Gemini / OpenAI / Anthropic 多协议线上传参、拒参识别、原生写法与降级回退链；`xhigh` 首字超时窗口扩展至 600 秒，Anthropic `xhigh` 默认 `max_tokens` 提升至 `64_000`。
+- 保留 Gemini 3/4 OpenAI 兼容工具调用的 `extra_content.google.thought_signature`，修复切换极低/超高提示文案及流式输出覆盖 `info` 级别回退提示的问题。
+
 ## 2.0.3 更新
 
 - 回答表格可直接框选单元格，沿边缘拖动可选整行、整列，复制到 Excel 保留行列结构。双击单元格后可自由拖选部分文字。

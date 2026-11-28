@@ -537,6 +537,14 @@
   opacity: 0.62;
 }
 
+.reasoning-trigger.clamped {
+  color: var(--amber);
+}
+
+.reasoning-trigger.clamped:hover:not(:disabled) {
+  background: var(--amber-tonal);
+}
+
 .permission-menu,
 .reasoning-menu {
   position: absolute;
@@ -701,6 +709,19 @@
   font-style: normal;
   letter-spacing: 0.04em;
   text-transform: uppercase;
+}
+
+.reasoning-unsupported-badge {
+  margin-left: auto;
+  padding: 1px 6px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-full);
+  background: var(--hover);
+  color: var(--subtle);
+  font-size: 10px;
+  font-weight: 500;
+  line-height: 1.5;
+  white-space: nowrap;
 }
 
 .reasoning-option small {

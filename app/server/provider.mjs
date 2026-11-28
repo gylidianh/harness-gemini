@@ -1,6 +1,6 @@
 import { randomUUID } from 'node:crypto';
 import { abortError, checkAbort, isObject, safeError } from './util.mjs';
-import { REASONING_BODY_FIELDS, reasoningRequestVariants } from '../shared/reasoning-effort.mjs';
+import { REASONING_BODY_FIELDS, reasoningLevelMeta, reasoningRequestPlan } from '../shared/reasoning-effort.mjs';
 // Node's fetch applies a hidden 300s body watchdog of its own, which killed a thinking model's
 // reply mid-stream; this agent replaces it with the watchdogs defined below.
 import { providerFetch, errorCauseChain, hasPermanentFailure } from './http-agent.mjs';
@@ -17,6 +17,7 @@ const ANTHROPIC_VERSION = '2023-06-01';
 // accept that much, and asking for room to write is not the same as asking for something
 // unsupported: a rejection naming max_tokens is answered by lowering it instead of failing.
 export const ANTHROPIC_MAX_TOKENS = 32_000;
+export const ANTHROPIC_XHIGH_MAX_TOKENS = 64_000;
 export const ANTHROPIC_MAX_TOKENS_FALLBACK = 8_192;
 
 // How long a trailing metadata frame may take after the reply itself was declared finished.
@@ -49,7 +50,10 @@ const FIRST_OUTPUT_TIMEOUT = 60_000;
 // request was dropped and re-sent from scratch, up to ten times, and never answered. When the
 // request asks for reasoning, or the model is one that always reasons, the window is five minutes.
 const REASONING_FIRST_OUTPUT_TIMEOUT = 300_000;
-const ALWAYS_REASONING_MODELS = /(?:^|[/:])(?:o\d(?:-|$)|o\d-mini|gpt-5|gpt-oss)|deepseek-r1|reasoner|thinking|qwq/i;
+// Extra-high reasoning tiers (Gemini 4 Neon/Hydrogen xhigh, GPT-5.2+ xhigh, Claude 4.7+ xhigh)
+// can stay silent longer on relays that buffer thought tokens; align with the 600s idle window.
+const XHIGH_FIRST_OUTPUT_TIMEOUT = 600_000;
+const ALWAYS_REASONING_MODELS = /(?:^|[/:])(?:o\d(?:-|$)|o\d-mini|gpt-[5-9]|gpt-oss)|deepseek-r1|reasoner|thinking|qwq|gemini-(?:[4-9]|(?:2\.5|3(?:\.\d+)?)-pro)(?:[.\-]|$)/i;
 /** How many times one request may be restarted while it has produced nothing. */
 const OUTPUT_RETRIES = 10;
 // fix3: a request that timed out waiting for its first output is most often a model thinking in
@@ -205,12 +209,18 @@ function headers(settings, stream = false, protocol = 'chat') {
  * the version rule but which never enabled thinking. Recognising that specific refusal lets the
  * request be re-sent without the field instead of failing the turn.
  */
-function rejectsReasoning(status, message) {
+function rejectsReasoning(status, message, payload = null, activeEntry = null) {
   if (![400, 422].includes(status)) return false;
-  if (!/reasoning|thinking|thought/i.test(message)) return false;
-  // 'requires' / 'must' / 'omit' / 'adaptive' cover the newer refusals that name the spelling the
-  // model wants instead, e.g. 'requires adaptive thinking; omit thinking or use thinking.type=adaptive'.
-  return /unrecognized|unknown|unsupported|not supported|does not support|not permitted|invalid|extra (?:field|input|parameter)|unexpected|not allowed|cannot|only|requires?|required|must|omit|adaptive|deprecated|no longer|budget_tokens|output_config|effort/i.test(message);
+  const text = String(message ?? '');
+  const mentionsReasoningField = /reasoning|thinking|thought|output_config|\beffort\b|thinking_level|thinking_config|thinking_budget|budget_tokens/i.test(text);
+  const mentionsExtraBody = Boolean(payload && 'extra_body' in payload) && /\bextra_body\b|\bgoogle\b/i.test(text);
+  const activeLevel = activeEntry?.level ?? '';
+  const mentionsActiveExtremeLevel = (activeLevel === 'xhigh' || activeLevel === 'minimal')
+    && new RegExp(`\\b${activeLevel}\\b`, 'i').test(text);
+  if (!mentionsReasoningField && !mentionsExtraBody && !mentionsActiveExtremeLevel) return false;
+  // 'requires' / 'must' / 'omit' / 'adaptive' / 'enum' / 'supported values' cover both older
+  // schema refusals and newer effort-tier rejections (e.g. "does not support effort level 'xhigh'").
+  return /unrecognized|unknown|unsupported|not supported|does not support|not permitted|invalid|extra (?:field|input|parameter)|unexpected|not allowed|cannot|only|requires?|required|must|omit|adaptive|deprecated|no longer|budget_tokens|output_config|effort|enum|expected|allowed|supported values/i.test(text);
 }
 
 /** True when this body carries a reasoning field that could be dropped and re-sent. */
@@ -225,13 +235,30 @@ function withReasoningVariant(body, variant) {
   return variant ? { ...next, ...variant } : next;
 }
 
+function normalizeVariantEntry(entry) {
+  if (!entry || typeof entry !== 'object') return null;
+  if ('body' in entry && isObject(entry.body)) return entry;
+  return { body: entry, level: '', downgraded: false };
+}
+
+function downgradedReasoningNote(fromLevel, toLevel) {
+  const from = reasoningLevelMeta(fromLevel);
+  const to = reasoningLevelMeta(toLevel);
+  const fromText = from ? `「${from.label}（${from.id}）」` : `「${fromLevel}」`;
+  const toText = to ? `「${to.label}（${to.id}）」` : `「${toLevel}」`;
+  return `上游接口不接受本次的${fromText}推理等级，已在这次请求中自动降级为${toText}并重新发送。`;
+}
+
 /**
  * Sends a request, and on a refusal of the reasoning field walks through the remaining spellings
- * (variants[1..]) before finally sending without any reasoning field. Each spelling is tried once,
- * so the worst case is variants.length + 1 requests, all rejected before generation started.
+ * (variants[1..]) — including alternate wire formats and extreme-tier step-downs (xhigh -> high) —
+ * before finally sending without any reasoning field. Each spelling is tried once, so all retries
+ * happen before generation starts.
  * 'adjust(payload, variant)' lets a protocol fix fields that depend on the spelling (max_tokens).
  */
 async function sendWithReasoningFallback({ body, variants, send, apiKey, signal, onNotice, adjust = payload => payload, extraRetry }) {
+  const entries = Array.isArray(variants) ? variants.map(normalizeVariantEntry).filter(Boolean) : [];
+  let activeEntry = entries[0] ?? null;
   let payload = body;
   let next = 1;
   // 1.3.3: a protocol-specific adjustment (Chat's stream_options, Anthropic's max_tokens and
@@ -241,17 +268,21 @@ async function sendWithReasoningFallback({ body, variants, send, apiKey, signal,
   while (!response.ok) {
     const rejected = await upstreamError(response, apiKey);
     const extra = extraLeft > 0 ? extraRetry?.(response.status, rejected.message, payload) ?? null : null;
-    const dropReasoning = !extra && rejectsReasoning(response.status, rejected.message) && hasReasoningField(payload);
+    const dropReasoning = !extra && rejectsReasoning(response.status, rejected.message, payload, activeEntry) && hasReasoningField(payload);
     if (!dropReasoning && !extra) throw rejected;
     checkAbort(signal);
     if (extra) { payload = extra; extraLeft -= 1; }
     if (dropReasoning) {
-      const variant = next < variants.length ? variants[next] : null;
+      activeEntry = next < entries.length ? entries[next] : null;
       next += 1;
-      payload = adjust(withReasoningVariant(payload, variant), variant);
-      if (!variant) await onNotice?.({ message: DROPPED_REASONING_NOTE });
+      const variantBody = activeEntry?.body ?? null;
+      payload = adjust(withReasoningVariant(payload, variantBody), variantBody);
+      if (!activeEntry) await onNotice?.({ message: DROPPED_REASONING_NOTE });
     }
     response = await send(payload);
+  }
+  if (activeEntry?.downgraded && activeEntry.downgradedFrom && activeEntry.level) {
+    await onNotice?.({ message: downgradedReasoningNote(activeEntry.downgradedFrom, activeEntry.level) });
   }
   return response;
 }
@@ -330,6 +361,10 @@ function reasoningParts(message) {
   if (message.reasoning_details !== undefined) {
     const text = reasoningValue(message.reasoning_details);
     if (text) return text;
+  }
+  if (isObject(message.extra_content?.google)) {
+    const googleThought = reasoningValue(message.extra_content.google.thought ?? message.extra_content.google.thought_summary);
+    if (googleThought) return googleThought;
   }
   if (Array.isArray(message.content)) {
     const text = message.content.filter(isReasoningPart).map(reasoningValue).join('');
@@ -535,8 +570,8 @@ async function chatCompletion({ settings, model, messages, tools, stream = true,
   const timeout = requestSignal(signal, { firstOutput: stream ? firstOutput : 0 });
   // The configured reasoning level only reaches a model that accepts one; a plain chat model
   // gets no such field at all, because an unknown parameter is rejected outright.
-  const reasoningVariants = reasoningRequestVariants(settings.reasoningEffort, model, 'chat');
-  const body = { model, messages: withChatReasoning(messages), stream, ...(stream ? { stream_options: { include_usage: true } } : {}), ...(tools?.length ? { tools, tool_choice: toolChoice === 'none' ? 'none' : 'auto' } : {}), ...(reasoningVariants[0] ?? {}) };
+  const reasoningPlan = reasoningRequestPlan(settings.reasoningEffort, model, 'chat');
+  const body = { model, messages: withChatReasoning(messages), stream, ...(stream ? { stream_options: { include_usage: true } } : {}), ...(tools?.length ? { tools, tool_choice: toolChoice === 'none' ? 'none' : 'auto' } : {}), ...(reasoningPlan.variants[0]?.body ?? {}) };
   const calls = new Map(); let finishReason = null; let usage;
   // IDs identify a call across chunks; packet positions are used only for a stable group.
   const callSlots = new Map();
@@ -585,6 +620,19 @@ async function chatCompletion({ settings, model, messages, tools, stream = true,
       if (typeof fn?.name === 'string' && fn.name) existing.function.name = delta && existing.function.name && existing.function.name !== fn.name ? existing.function.name + fn.name : fn.name;
       if (typeof fn?.arguments === 'string') existing.function.arguments = delta ? existing.function.arguments + fn.arguments : fn.arguments;
       else if (isObject(fn?.arguments)) existing.function.arguments = JSON.stringify(fn.arguments);
+      // Gemini 3/4 OpenAI-compatible endpoints attach `extra_content.google.thought_signature` to
+      // tool calls and require it to be echoed back verbatim on the next turn.
+      if (isObject(incoming.extra_content)) {
+        existing.extra_content = isObject(existing.extra_content)
+          ? {
+              ...existing.extra_content,
+              ...incoming.extra_content,
+              ...(isObject(existing.extra_content.google) && isObject(incoming.extra_content.google)
+                ? { google: { ...existing.extra_content.google, ...incoming.extra_content.google } }
+                : {}),
+            }
+          : incoming.extra_content;
+      }
       if (existing.function.arguments.length > MAX_TOOL_ARGUMENTS || existing.function.name.length > 256 || existing.id.length > 256) throw new Error('工具请求超出大小限制。');
       calls.set(index, existing);
       packetSlots[position] = index;
@@ -634,7 +682,7 @@ async function chatCompletion({ settings, model, messages, tools, stream = true,
     // field first falls back to a stricter spelling and only then is dropped, so a strict gateway
     // costs a note instead of the whole answer.
     const response = await sendWithReasoningFallback({
-      body, variants: reasoningVariants, send: request, apiKey: settings.apiKey, signal, onNotice,
+      body, variants: reasoningPlan.variants, send: request, apiKey: settings.apiKey, signal, onNotice,
       extraRetry: (status, message, payload) => {
         if (!stream || !('stream_options' in payload) || !rejectsStreamUsage(status, message)) return null;
         const { stream_options: _usage, ...rest } = payload;
@@ -765,18 +813,22 @@ async function anthropicCompletion({ settings, model, messages, tools, stream = 
   const timeout = requestSignal(signal, { firstOutput: stream ? firstOutput : 0 });
   // Declared here, before anything reads it: the request body below is built with maxTokensFor().
   let maxTokensCeiling = ANTHROPIC_MAX_TOKENS;
+  let maxTokensReduced = false;
   const { system, messages: turns } = anthropicMessages(messages);
   const requestTools = anthropicTools(tools);
   // Extended thinking is opt-in on the Messages API. Newer Claude takes the adaptive form
   // (`thinking.type=adaptive` + `output_config.effort`); older Claude takes a token budget, which
   // has to stay below max_tokens, so the ceiling is raised only for that spelling.
-  const reasoningVariants = reasoningRequestVariants(settings.reasoningEffort, model, 'anthropic');
-  const thinking = reasoningVariants[0] ?? {};
+  const reasoningPlan = reasoningRequestPlan(settings.reasoningEffort, model, 'anthropic');
+  const thinking = reasoningPlan.variants[0]?.body ?? {};
   // fix3: a model whose output limit is known gets a request that fits it from the start (the
   // thinking budget stays below max_tokens), instead of a guaranteed first refusal.
   const knownLimit = anthropicOutputLimit(model);
   const maxTokensFor = variant => {
-    const total = maxTokensCeiling + (Number(variant?.thinking?.budget_tokens) || 0);
+    const base = !maxTokensReduced && variant?.output_config?.effort === 'xhigh'
+      ? Math.max(maxTokensCeiling, ANTHROPIC_XHIGH_MAX_TOKENS)
+      : maxTokensCeiling;
+    const total = base + (Number(variant?.thinking?.budget_tokens) || 0);
     return knownLimit ? Math.min(total, knownLimit) : total;
   };
   const body = {
@@ -884,7 +936,7 @@ async function anthropicCompletion({ settings, model, messages, tools, stream = 
     // The raised max_tokens exists only to leave room for a thinking budget, so it follows the
     // spelling being tried and returns to the standard ceiling when thinking is dropped.
     const response = await sendWithReasoningFallback({
-      body, variants: reasoningVariants, send, apiKey: settings.apiKey, signal, onNotice,
+      body, variants: reasoningPlan.variants, send, apiKey: settings.apiKey, signal, onNotice,
       adjust: (payload, variant) => ({ ...payload, max_tokens: maxTokensFor(variant) }),
       // A model or gateway that accepts only the historical ceiling is answered by lowering it,
       // instead of failing a turn whose only problem was asking for room to write.
@@ -902,10 +954,17 @@ async function anthropicCompletion({ settings, model, messages, tools, stream = 
         const limit = outputTokenLimit(message);
         const budget = Number(payload?.thinking?.budget_tokens) || 0;
         if (limit && payload.max_tokens > limit) {
+          maxTokensReduced = true;
           const nextBudget = budget ? Math.max(1_024, Math.min(budget, limit - 4_096)) : 0;
           maxTokensCeiling = Math.max(1_024, limit - nextBudget);
           return { ...payload, max_tokens: limit, ...(budget ? { thinking: { ...payload.thinking, budget_tokens: nextBudget } } : {}) };
         }
+        if (!maxTokensReduced && payload.max_tokens > ANTHROPIC_MAX_TOKENS) {
+          maxTokensReduced = true;
+          maxTokensCeiling = ANTHROPIC_MAX_TOKENS;
+          return { ...payload, max_tokens: maxTokensFor(payload) };
+        }
+        maxTokensReduced = true;
         if (maxTokensCeiling === ANTHROPIC_MAX_TOKENS_FALLBACK) {
           // fix3: a refusal that names no limit, with a thinking budget still large: the budget
           // itself shrinks once (8,192 + 4,096), which fits every Claude that thinks.
@@ -1004,13 +1063,14 @@ function responsesReasoning(item) {
 async function responsesCompletion({ settings, model, messages, tools, stream = true, signal, onText, onReasoning, onUsage, onNotice, firstOutput = 0, toolChoice = 'auto' }) {
   const timeout = requestSignal(signal, { firstOutput: stream ? firstOutput : 0 });
   const requestTools = responsesTools(tools);
+  const reasoningPlan = reasoningRequestPlan(settings.reasoningEffort, model, 'responses');
   const body = {
     model,
     input: responsesInput(messages),
     stream,
     store: false,
     ...(requestTools.length ? { tools: requestTools, tool_choice: toolChoice === 'none' ? 'none' : 'auto' } : {}),
-    ...(reasoningRequestVariants(settings.reasoningEffort, model, 'responses')[0] ?? {}),
+    ...(reasoningPlan.variants[0]?.body ?? {}),
   };
   const calls = new Map(); let finishReason = null; let usage = null;
   let sawContent = false;
@@ -1097,7 +1157,7 @@ async function responsesCompletion({ settings, model, messages, tools, stream = 
   };
   try {
     const response = await sendWithReasoningFallback({
-      body, variants: reasoningRequestVariants(settings.reasoningEffort, model, 'responses'), send, apiKey: settings.apiKey, signal, onNotice,
+      body, variants: reasoningPlan.variants, send, apiKey: settings.apiKey, signal, onNotice,
     });
     timeout.touch();
     if (!isJsonResponse(response)) {
@@ -1406,8 +1466,11 @@ function firstOutputWindow(options) {
   if (Number.isFinite(options.firstOutputTimeout)) return options.firstOutputTimeout;
   const model = String(options.model ?? '');
   const level = options.settings?.reasoningEffort;
-  const asked = Boolean(level) && reasoningRequestVariants(level, model, protocolOf(options.settings)).length > 0;
-  return asked || ALWAYS_REASONING_MODELS.test(model) ? REASONING_FIRST_OUTPUT_TIMEOUT : FIRST_OUTPUT_TIMEOUT;
+  const plan = reasoningRequestPlan(level, model, protocolOf(options.settings));
+  if (plan.effective === 'xhigh') return XHIGH_FIRST_OUTPUT_TIMEOUT;
+  const asked = plan.variants.length > 0;
+  const alwaysReasoning = ALWAYS_REASONING_MODELS.test(model) && !/(?:^|[/:_-])(?:image|imagen)(?:[^a-z0-9]|$)/i.test(model);
+  return asked || alwaysReasoning ? REASONING_FIRST_OUTPUT_TIMEOUT : FIRST_OUTPUT_TIMEOUT;
 }
 
 export async function completion(options) {

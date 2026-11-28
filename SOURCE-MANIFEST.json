@@ -1,9 +1,9 @@
 {
-  "version": "2.0.3",
-  "release": "https://github.com/gylidianh/harness-gemini/releases/tag/v2.0.3",
-  "installerSha256": "e8a8911fc6be2bfe8c68d7b279ae4d05bf49e4ebf430732489b26e7eb836bec9",
-  "installerBytes": 128164378,
-  "appArchiveSha256": "a5da010d17a04a456314ff9e98f806aa3a72cc0e8315469f1136c04f3d89bb79",
+  "version": "2.0.4",
+  "release": "https://github.com/gylidianh/harness-gemini/releases/tag/v2.0.4",
+  "installerSha256": "2a4c068e67b571efcb63bd5dfc8bb01b26c68eb7717d03b96b8e0bb09d135b61",
+  "installerBytes": 128169453,
+  "appArchiveSha256": "a1d8fe5076f2007d5dd0dab046e5e33d39615391af46f53739388a2edb88f682",
   "scope": "Hashes of corresponding source files. Builder normalizes package.json; other listed files are byte-identical to the installer payload.",
   "files": [
     {
@@ -459,12 +459,12 @@
     {
       "path": "app/dist/composer-controls.css",
       "bytes": 7393,
-      "sha256": "845c0f799f0628b8899b87a525976dc9a9980d81afb8aadc7cc436a017412e81"
+      "sha256": "efc7761180d83050f5f43682286cd401d4eac0f507cefc0d0d3bc2fd2200d179"
     },
     {
       "path": "app/dist/composer-controls.js",
       "bytes": 8874,
-      "sha256": "ef1a4459cb4b94613a25b96954af42761fdbf2d8e2bdffa470e19d46e5863384"
+      "sha256": "a9da20cfaf8b72ca7fbd53d6907e242bab0c5d9f604774accee83443347db6a5"
     },
     {
       "path": "app/dist/computer-settings.css",
@@ -638,8 +638,8 @@
     },
     {
       "path": "app/dist/src/app.js",
-      "bytes": 128724,
-      "sha256": "2c908baa597783f95253b3f289a334aabeffa4bb68818547a14f9afedf84058a"
+      "bytes": 128952,
+      "sha256": "9730687e12b9cf31dcd17d0e87ce6fc3048ea1bff7ffd7bf985a93849ec8b9a0"
     },
     {
       "path": "app/dist/src/browser-panel.js",
@@ -648,8 +648,8 @@
     },
     {
       "path": "app/dist/src/composer-widgets.js",
-      "bytes": 57133,
-      "sha256": "af560d0e721092761841f8b47c06342c8660f2f64e2f72be5d622431441058ef"
+      "bytes": 59948,
+      "sha256": "7e3b3ce1e3936a15a008917d8bb6fe2ceca0f9afbc18e03c580a09621f16aaa8"
     },
     {
       "path": "app/dist/src/main.js",
@@ -663,8 +663,8 @@
     },
     {
       "path": "app/dist/src/model-utils.js",
-      "bytes": 24844,
-      "sha256": "d5734a26061917faa61a91cd2ab6330bb4880a736e83f45afed8137c96269a0a"
+      "bytes": 29684,
+      "sha256": "bcf84a3c89584911634d9c5cde88138fc15ac81bdc5e64608b8061f67a9e161d"
     },
     {
       "path": "app/dist/src/notifications.js",
@@ -673,8 +673,8 @@
     },
     {
       "path": "app/dist/src/settings-drawer.js",
-      "bytes": 64424,
-      "sha256": "647beed0a80e941b4ab5c453e614556120c700f944436cd40be4b43f2ad3b2df"
+      "bytes": 65734,
+      "sha256": "8600488de9dccf39508f4dab50ff5e711a594610c82c0c39f87f025c79e35e4f"
     },
     {
       "path": "app/dist/src/themes.js",
@@ -698,8 +698,8 @@
     },
     {
       "path": "app/dist/styles/composer.css",
-      "bytes": 28706,
-      "sha256": "c9190e4b5aeea8994c6b8b6e1862811eaeff8317cf37758e457cf0db69bca788"
+      "bytes": 29127,
+      "sha256": "b8510f33e56d6d8c5895b0834ec1e388be899d26b96c5e2323c84292eeb796e5"
     },
     {
       "path": "app/dist/styles/katex.css",
@@ -779,7 +779,7 @@
     {
       "path": "app/package.json",
       "bytes": 889,
-      "sha256": "ad5234db1a0dced341dccd9f09af07eac39497d14f9cef9385bd2c5bd6b11674"
+      "sha256": "2b85a195fb1d5375fce567bc43a53c1012294e531afea5712e2f78b18d5ede0e"
     },
     {
       "path": "app/remote/device-store.mjs",
@@ -798,8 +798,8 @@
     },
     {
       "path": "app/server/app.mjs",
-      "bytes": 186200,
-      "sha256": "27bd0148c64640598a1ced7698d0c9837d43a74006bd7714a8a75c5fc336ee82"
+      "bytes": 186351,
+      "sha256": "26433775ef7d048e1174f04872659c5892251abcc94655aaa45b8bf296af6a4f"
     },
     {
       "path": "app/server/assistant-persona.mjs",
@@ -1003,8 +1003,8 @@
     },
     {
       "path": "app/server/provider.mjs",
-      "bytes": 81732,
-      "sha256": "20b4fc719dc7ee245b371dd62e022145955647f076cb9f4b97f12336ea7a11d7"
+      "bytes": 85423,
+      "sha256": "6031022110375eb17a093b6182a8b048c68a287409fb9a859fa08a53e83da869"
     },
     {
       "path": "app/server/questions.mjs",
@@ -1033,8 +1033,8 @@
     },
     {
       "path": "app/server/store.mjs",
-      "bytes": 70134,
-      "sha256": "850922451b653eb76013a610544ecd81592583827c5723e3ef0f2d045587d8b1"
+      "bytes": 70233,
+      "sha256": "3fb7745ce862e3a4c2111dc2fb570d40e0774f91c9b8ce6b5281d9d23b3b7eb0"
     },
     {
       "path": "app/server/subagent.mjs",
@@ -1108,8 +1108,8 @@
     },
     {
       "path": "app/shared/reasoning-effort.mjs",
-      "bytes": 8608,
-      "sha256": "4722de7d287600e98c27b6f16810817830bf4e66d6ce756b54499538d5633e9b"
+      "bytes": 18880,
+      "sha256": "49c9d6954bd298c81273658b6c4ccc5b8faff7a78e5df219adc146059775dc6e"
     },
     {
       "path": "app/shared/relay-protocol.mjs",

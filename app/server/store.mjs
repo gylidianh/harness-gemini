@@ -4,7 +4,7 @@ import path from 'node:path';
 import { DEFAULT_CONTEXT_WINDOW, MAX_CONTEXT_WINDOW, MIN_CONTEXT_WINDOW, isValidContextWindow } from './context.mjs';
 import { atomicWrite, boundedString, HttpError, isObject, readJson, requireObject, safeError } from './util.mjs';
 import { identityCodec, isSealedSecret } from './secret.mjs';
-import { isReasoningLevel, storedReasoningLevel } from '../shared/reasoning-effort.mjs';
+import { REASONING_LEVEL_IDS, isReasoningLevel, storedReasoningLevel } from '../shared/reasoning-effort.mjs';
 // 1.4.8: a connection's advanced options are validated here, where they are saved.
 import { MAX_CONCURRENCY, MAX_RPM, PROXY_MODES, normalizeExtraBodyText, normalizeHeaders, normalizeLimit, normalizeProxyMode, normalizeProxyUrl } from './provider-extra.mjs';
 import { updateConcurrencyLimit } from './provider-limits.mjs';
@@ -270,7 +270,9 @@ function normalizeConnection(update, previous, { migrateAgentModel = false, tole
     const requested = update.reasoningEffort;
     if (requested === undefined || requested === null || requested === '') next.reasoningEffort = '';
     else {
-      if (!isReasoningLevel(requested)) throw new HttpError(400, '推理等级必须是 low、medium 或 high。');
+      if (!isReasoningLevel(requested)) {
+        throw new HttpError(400, `推理等级必须是 ${REASONING_LEVEL_IDS.slice(0, -1).join('、')} 或 ${REASONING_LEVEL_IDS.at(-1)}。`);
+      }
       next.reasoningEffort = requested;
     }
   }

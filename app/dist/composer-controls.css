@@ -163,7 +163,7 @@
 
 .app-shell[data-skin] .reasoning-menu {
   box-sizing: border-box;
-  width: min(248px, calc(100vw - 32px));
+  width: min(276px, calc(100vw - 32px));
   padding: 5px;
   background: var(--surface);
   border: 1px solid var(--line-strong, var(--line));

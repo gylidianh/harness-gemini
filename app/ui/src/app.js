@@ -71,6 +71,7 @@ import {
   getActiveProfile,
   getConfiguredModes,
   getProfileModelForMode,
+  getReasoningLevelMeta,
   getSessionTitle,
   hasInnerScrollable,
   isNearBottom,
@@ -1593,7 +1594,11 @@ export function App() {
               ...next,
               messages: next.messages.map((m) =>
                 m.id === msgId
-                  ? { ...m, text: `${m.text || ''}${payload.text || ''}`, notice: null }
+                  ? {
+                      ...m,
+                      text: `${m.text || ''}${payload.text || ''}`,
+                      ...(m.noticeKind === 'busy' ? { notice: null, noticeKind: null } : {}),
+                    }
                   : m,
               ),
             };
@@ -1613,7 +1618,7 @@ export function App() {
                   ? {
                       ...m,
                       reasoning: `${m.reasoning || ''}${payload.text || ''}`,
-                      notice: null,
+                      ...(m.noticeKind === 'busy' ? { notice: null, noticeKind: null } : {}),
                     }
                   : m,
               ),
@@ -2296,7 +2301,7 @@ export function App() {
     const ok = await saveQuickSettingsPatch({ reasoningEffort: normalized }, 'reasoning');
     if (ok) {
       const label = normalized
-        ? { low: '低', medium: '中', high: '高' }[normalized]
+        ? getReasoningLevelMeta(normalized)?.label || normalized
         : '模型默认';
       showToast(
         hasAnyRunning ? `推理等级已设为${label}，从下一条消息生效` : `推理等级已设为${label}`,

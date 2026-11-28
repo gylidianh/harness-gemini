@@ -951,6 +951,10 @@ export async function createApp({ dataDir = path.join(PROJECT_ROOT, 'data'), def
             // A refused reasoning level is reported plainly: the turn continues, so this is a
             // note rather than an error.
             onNotice: async info => {
+              if (info?.message) {
+                assistant.notice = info.message;
+                assistant.noticeKind = 'info';
+              }
               await sse.send('notice', { id: assistant.id, message: info.message, kind: 'info' });
             },
           });

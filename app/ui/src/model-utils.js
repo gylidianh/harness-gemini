@@ -60,13 +60,19 @@ export function isProfileConfigured(profile) {
 
 /* -------------------------------------------------------------------------- */
 /* Reasoning Effort & Capability Detection                                    */
+/* (Kept in strict parity with src/shared/reasoning-effort.mjs)               */
 /* -------------------------------------------------------------------------- */
 
 export const REASONING_LEVELS = [
   {
+    id: 'minimal',
+    label: '极低',
+    description: '极少思考，延迟最低，适合轻量快速任务',
+  },
+  {
     id: 'low',
     label: '低',
-    description: '思考最少，回答最快，消耗 token 最少',
+    description: '轻度思考，回答较快，消耗 token 较少',
   },
   {
     id: 'medium',
@@ -76,47 +82,176 @@ export const REASONING_LEVELS = [
   {
     id: 'high',
     label: '高',
-    description: '思考最深入，适合复杂推理与多步任务',
+    description: '深入思考，适合复杂推理与多步任务',
+  },
+  {
+    id: 'xhigh',
+    label: '超高',
+    description: '极限深度推理，耗时与 token 消耗显著增加，适合最复杂的难题',
   },
 ];
 
-const REASONING_LEVEL_SET = new Set(REASONING_LEVELS.map((item) => item.id));
+const REASONING_LEVEL_IDS = REASONING_LEVELS.map((item) => item.id);
+const REASONING_LEVEL_SET = new Set(REASONING_LEVEL_IDS);
+const REASONING_LEVEL_BY_ID = new Map(REASONING_LEVELS.map((item) => [item.id, item]));
 
-const REASONING_MODEL_PATTERNS = [
-  /(?:^|[/:])(?:o[1-9]\d*|gpt-[5-9]\d*|gpt-\d{2,})(?:[.\-]|$)/i,
+const LEVELS_STANDARD = ['low', 'medium', 'high'];
+const LEVELS_WITH_MINIMAL = ['minimal', 'low', 'medium', 'high'];
+const LEVELS_WITH_XHIGH = ['low', 'medium', 'high', 'xhigh'];
+
+const NON_REASONING_MEDIA_MODEL =
+  /(?:^|[/:_-])(?:image|imagen|veo|tts|audio|transcribe|whisper|embedding|embed|moderation|dall-e)(?:[^a-z0-9]|$)/i;
+
+const OTHER_REASONING_MODEL_PATTERNS = [
   /deepseek-(?:r\d+|reasoner|v3\.[1-9]\d*(?:[.\-]|$)|(?:v[4-9]|v\d{2,})(?:\.\d+)?(?:[.\-]|$))/i,
   /(?:qwq|qwen[3-9])/i,
   /glm-(?:z\d+|zero|4\.(?:[5-9]\d*|[1-9]\d+)|(?:[5-9]|\d{2,})(?:\.\d+)?)/i,
   /kimi-[a-z0-9.-]*(?:k2|k3|think)/i,
-  /grok-[3-9]/i,
-  /gemini-(?:2\.5|[3-9])/i,
-  /claude-(?:[a-z]+-)?(?:3[.\-]7|[4-9])/i,
   /(?:reasoner|reasoning|thinking|-think)/i,
 ];
 
 const CLAUDE_THINKING_PATTERN = /claude-(?:[a-z]+-)?(?:3[.\-]7|[4-9])/i;
+const CLAUDE_XHIGH_PATTERNS = [
+  /claude-(?:[a-z]+-)?(?:4[.\-](?:[7-9]|\d{2,})|[5-9])(?:[^0-9]|$)/i,
+  /claude-(?:4[.\-](?:[7-9]|\d{2,})|[5-9])-(?:opus|sonnet|haiku)(?:[^a-z0-9]|$)/i,
+];
+
+const GEMINI_ANY_PATTERN = /gemini-/i;
+const GEMINI_REASONING_PATTERN = /gemini-(?:2\.5|[3-9]|\d{2,})(?:[^0-9]|$)/i;
+const GEMINI_4_CARBON_PATTERN = /gemini-4(?:\.\d+)?-carbon(?:[^a-z0-9]|$)/i;
+const GEMINI_4_XHIGH_PATTERN = /gemini-4(?:\.\d+)?-(?:neon|hydrogen)(?:[^a-z0-9]|$)/i;
+const GEMINI_4_PLUS_FLASH_LITE_PATTERN = /gemini-(?:[4-9]|\d{2,})(?:\.\d+)?-flash-lite(?:[^a-z0-9]|$)/i;
+const GEMINI_4_PLUS_PATTERN = /gemini-(?:[4-9]|\d{2,})(?:[.\-_]|$)/i;
+const GEMINI_3_MINIMAL_PATTERN =
+  /gemini-3(?:\.\d+)?-flash-lite(?:[^a-z0-9]|$)|gemini-3(?:\.[0-7])?-flash(?:[^a-z0-9]|$)/i;
+
+const OPENAI_REASONING_PATTERN = /(?:^|[/:])(?:o[1-9]\d*|gpt-[5-9]\d*|gpt-\d{2,})(?:[.\-]|$)/i;
+const OPENAI_XHIGH_PATTERN =
+  /(?:^|[/:])(?:gpt-5\.1-codex-max|gpt-5\.[2-9]\d*|gpt-[6-9]\d*|gpt-\d{2,})(?:[.\-]|$)/i;
+const OPENAI_GPT5_MINIMAL_PATTERN = /(?:^|[/:])gpt-5(?![.\d])(?!-pro(?:[.\-]|$))(?:[.\-]|$)/i;
+
+const GROK_REASONING_PATTERN = /grok-[3-9]/i;
+const GROK_XHIGH_PATTERN = /grok-(?:4\.[6-9]\d*|[5-9]\d*)(?:[^0-9]|$)/i;
 
 export function isValidReasoningEffort(value) {
   return typeof value === 'string' && REASONING_LEVEL_SET.has(value);
 }
 
-export function getSupportedReasoningLevels(model, protocol = 'chat') {
+export function getReasoningLevelMeta(value) {
+  return isValidReasoningEffort(value) ? REASONING_LEVEL_BY_ID.get(value) : null;
+}
+
+export function getSupportedReasoningLevelIds(model, protocol = 'chat') {
   const trimmed = typeof model === 'string' ? model.trim() : '';
-  if (!trimmed) return [];
-  if (protocol === 'anthropic' && /claude-/i.test(trimmed)) {
-    return CLAUDE_THINKING_PATTERN.test(trimmed) ? [...REASONING_LEVELS] : [];
+  if (!trimmed || NON_REASONING_MEDIA_MODEL.test(trimmed)) return [];
+
+  if (/claude-/i.test(trimmed)) {
+    if (!CLAUDE_THINKING_PATTERN.test(trimmed)) return [];
+    if (CLAUDE_XHIGH_PATTERNS.some((pattern) => pattern.test(trimmed))) {
+      return [...LEVELS_WITH_XHIGH];
+    }
+    return [...LEVELS_STANDARD];
   }
-  return REASONING_MODEL_PATTERNS.some((pattern) => pattern.test(trimmed))
-    ? [...REASONING_LEVELS]
-    : [];
+
+  if (GEMINI_ANY_PATTERN.test(trimmed)) {
+    if (!GEMINI_REASONING_PATTERN.test(trimmed)) return [];
+    if (GEMINI_4_CARBON_PATTERN.test(trimmed)) return [...LEVELS_STANDARD];
+    if (GEMINI_4_XHIGH_PATTERN.test(trimmed)) return [...LEVELS_WITH_XHIGH];
+    if (GEMINI_4_PLUS_FLASH_LITE_PATTERN.test(trimmed)) return [...LEVELS_WITH_MINIMAL];
+    if (GEMINI_4_PLUS_PATTERN.test(trimmed)) return [...LEVELS_WITH_XHIGH];
+    if (GEMINI_3_MINIMAL_PATTERN.test(trimmed)) return [...LEVELS_WITH_MINIMAL];
+    return [...LEVELS_STANDARD];
+  }
+
+  if (OPENAI_REASONING_PATTERN.test(trimmed)) {
+    if (OPENAI_XHIGH_PATTERN.test(trimmed)) return [...LEVELS_WITH_XHIGH];
+    if (OPENAI_GPT5_MINIMAL_PATTERN.test(trimmed)) return [...LEVELS_WITH_MINIMAL];
+    return [...LEVELS_STANDARD];
+  }
+
+  if (GROK_REASONING_PATTERN.test(trimmed)) {
+    return GROK_XHIGH_PATTERN.test(trimmed) ? [...LEVELS_WITH_XHIGH] : [...LEVELS_STANDARD];
+  }
+
+  if (OTHER_REASONING_MODEL_PATTERNS.some((pattern) => pattern.test(trimmed))) {
+    return [...LEVELS_STANDARD];
+  }
+
+  return [];
+}
+
+export function getSupportedReasoningLevels(model, protocol = 'chat') {
+  return getSupportedReasoningLevelIds(model, protocol)
+    .map((id) => REASONING_LEVEL_BY_ID.get(id))
+    .filter(Boolean);
 }
 
 export function supportsReasoningEffort(model, protocol = 'chat') {
-  return getSupportedReasoningLevels(model, protocol).length > 0;
+  return getSupportedReasoningLevelIds(model, protocol).length > 0;
+}
+
+export function supportsExactReasoningEffort(level, model, protocol = 'chat') {
+  return (
+    isValidReasoningEffort(level) &&
+    getSupportedReasoningLevelIds(model, protocol).includes(level)
+  );
 }
 
 export function normalizeReasoningEffort(value) {
   return isValidReasoningEffort(value) ? value : '';
+}
+
+export function resolveReasoningEffort(value, model, protocol = 'chat') {
+  const requested = normalizeReasoningEffort(value);
+  const supportedIds = getSupportedReasoningLevelIds(model, protocol);
+  if (!requested) {
+    return {
+      requested: '',
+      effective: '',
+      supported: supportedIds.length > 0,
+      clamped: false,
+      supportedIds,
+    };
+  }
+  if (!supportedIds.length) {
+    return {
+      requested,
+      effective: '',
+      supported: false,
+      clamped: false,
+      supportedIds: [],
+    };
+  }
+  if (supportedIds.includes(requested)) {
+    return {
+      requested,
+      effective: requested,
+      supported: true,
+      clamped: false,
+      supportedIds,
+    };
+  }
+  const requestedIndex = REASONING_LEVEL_IDS.indexOf(requested);
+  let effective = supportedIds[0];
+  let bestDistance = Infinity;
+  for (const candidate of supportedIds) {
+    const candidateIndex = REASONING_LEVEL_IDS.indexOf(candidate);
+    const distance = Math.abs(candidateIndex - requestedIndex);
+    if (
+      distance < bestDistance ||
+      (distance === bestDistance && candidateIndex < REASONING_LEVEL_IDS.indexOf(effective))
+    ) {
+      bestDistance = distance;
+      effective = candidate;
+    }
+  }
+  return {
+    requested,
+    effective,
+    supported: true,
+    clamped: true,
+    supportedIds,
+  };
 }
 
 /* -------------------------------------------------------------------------- */

@@ -1,6 +1,6 @@
 # 使用指南
 
-适用于 Harness Gemini 2.0.3。返回 [项目首页](../README.md) · [常见问题](faq.md)
+适用于 Harness Gemini 2.0.4。返回 [项目首页](../README.md) · [常见问题](faq.md)
 
 ## 安装与升级
 
@@ -12,18 +12,18 @@
 
 ### 校验安装包
 
-2.0.3 文件名：`Harness-Gemini-2.0.3-win-x64.exe`。
+2.0.4 文件名：`Harness-Gemini-2.0.4-win-x64.exe`。
 
 在文件所在目录打开 PowerShell，执行：
 
 ```powershell
-Get-FileHash .\Harness-Gemini-2.0.3-win-x64.exe -Algorithm SHA256
+Get-FileHash .\Harness-Gemini-2.0.4-win-x64.exe -Algorithm SHA256
 ```
 
-2.0.3 的 SHA-256 为：
+2.0.4 的 SHA-256 为：
 
 ```text
-e8a8911fc6be2bfe8c68d7b279ae4d05bf49e4ebf430732489b26e7eb836bec9
+2a4c068e67b571efcb63bd5dfc8bb01b26c68eb7717d03b96b8e0bb09d135b61
 ```
 
 其他版本请使用对应 Release 附带的 `SHA256SUMS.txt`，不要混用不同版本的校验值。
@@ -55,7 +55,7 @@ e8a8911fc6be2bfe8c68d7b279ae4d05bf49e4ebf430732489b26e7eb836bec9
 - **模式**：在已配置的聊天、编程、生图模式之间切换。
 - **权限**：选择请求批准、帮我批准或完全访问权限。
 - **模型**：选择连接与当前模式使用的模型。
-- **思考等级**：可选模型默认、低、中、高；实际发送的参数取决于模型和协议支持。
+- **思考等级**：可选模型默认、极低（`minimal`）、低（`low`）、中（`medium`）、高（`high`）、超高（`xhigh`）；实际支持范围与发送参数取决于模型和协议能力。
 - **发送 / 停止**：发送消息，或停止正在进行的任务。
 
 已开始的回复继续使用启动时的模型；切换后的配置用于下一条消息。任务进行中，部分操作可能暂不可用。

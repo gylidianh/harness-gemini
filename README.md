@@ -5,15 +5,15 @@ Windows 桌面 AI 工作台，在一个窗口中聊天、编程、生图和浏�
 [![版本](https://img.shields.io/github/v/release/gylidianh/harness-gemini)](https://github.com/gylidianh/harness-gemini/releases/latest)
 ![Windows x64](https://img.shields.io/badge/Windows-10%20%2F%2011%20x64-0078d4)
 
-**[下载 2.0.3 安装包](https://github.com/gylidianh/harness-gemini/releases/download/v2.0.3/Harness-Gemini-2.0.3-win-x64.exe)** · **[浏览源码](app/)** · [版本说明](CHANGELOG.md) · [使用指南](docs/usage.md) · [开发说明](docs/development.md) · [常见问题](docs/faq.md)
+**[下载 2.0.4 安装包](https://github.com/gylidianh/harness-gemini/releases/download/v2.0.4/Harness-Gemini-2.0.4-win-x64.exe)** · **[浏览源码](app/)** · [版本说明](CHANGELOG.md) · [使用指南](docs/usage.md) · [开发说明](docs/development.md) · [常见问题](docs/faq.md)
 
 ![Harness Gemini 1.4.4 主界面](docs/images/home-1.4.4.png)
 
-## 2.0.3 更新
+## 2.0.4 更新
 
-- 回答表格可直接框选单元格，沿边缘拖动可选整行、整列，复制到 Excel 保留行列结构。双击单元格后可自由拖选部分文字。
-- Windows 后台等待回答、审批或团队选模时显示蓝色角标；完成或报错显示红条。
-- 修复主窗口和内置浏览器的 Ctrl+=、Ctrl+Shift+= 和 Ctrl+小键盘加号缩放。
+- 推理等级扩展为完整 5 档（`minimal` 极低、`low` 低、`medium` 中、`high` 高、`xhigh` 超高），按模型实际能力精确区分支持范围，越界档位自动钳位并在界面明示。
+- 完善 Gemini / OpenAI / Anthropic 多协议线上传参、拒参识别、原生写法与降级回退链，并扩展 `xhigh` 首字超时窗口至 600 秒与 Anthropic `xhigh` 默认 `max_tokens` 至 64K。
+- 保留 Gemini 3/4 OpenAI 兼容工具调用的 `extra_content.google.thought_signature`，修复切换极低/超高提示文案及流式输出覆盖回退提示的问题。
 
 ## 功能
 
@@ -87,7 +87,7 @@ Windows 桌面 AI 工作台，在一个窗口中聊天、编程、生图和浏�
 
 ## 源码范围
 
-[app/](app/) 包含 2.0.3 的桌面端、服务端、手机页和前端源码；[app/ui/](app/ui/) 可重新生成界面。自建中继见 [relay-server/](relay-server/)。
+[app/](app/) 包含 2.0.4 的桌面端、服务端、手机页和前端源码；[app/ui/](app/ui/) 可重新生成界面。自建中继见 [relay-server/](relay-server/)。
 
 ## 贡献者
 

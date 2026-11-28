@@ -12,7 +12,7 @@ export function reasoningMenuPosition(trigger, container, viewportWidth, viewpor
   const minX = bounds && Number.isFinite(bounds.minX) ? bounds.minX : margin;
   const maxX = bounds && Number.isFinite(bounds.maxX) ? bounds.maxX : Math.max(margin, viewportWidth - margin);
   const topInset = bounds && Number.isFinite(bounds.topInset) ? bounds.topInset : 0;
-  const width = Math.min(248, Math.max(0, maxX - minX));
+  const width = Math.min(276, Math.max(0, maxX - minX));
   const left = Math.max(minX, Math.min(trigger.right - width, maxX - width));
   const above = trigger.top - topInset - margin - gap;
   const below = viewportHeight - trigger.bottom - margin - gap;
@@ -21,7 +21,7 @@ export function reasoningMenuPosition(trigger, container, viewportWidth, viewpor
     width: `${width}px`, left: `${left - container.left}px`, right: 'auto',
     top: upward ? 'auto' : `${trigger.bottom + gap - container.top}px`,
     bottom: upward ? `${container.bottom - trigger.top + gap}px` : 'auto',
-    maxHeight: `${Math.max(0, Math.min(420, upward ? above : below))}px`,
+    maxHeight: `${Math.max(0, Math.min(460, upward ? above : below))}px`,
   };
 }
 

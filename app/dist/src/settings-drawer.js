@@ -48,10 +48,11 @@ import {
   REASONING_LEVELS,
   createSettingsDraft,
   getConfiguredModes,
+  getReasoningLevelMeta,
   isProfileDirty,
   isValidHttpBaseUrl,
   normalizeProfileDraft,
-  supportsReasoningEffort,
+  resolveReasoningEffort,
 } from './model-utils.js';
 
 const { SettingsNavigation, SettingsContent, ProviderConnections, useSettingsDialog } =
@@ -335,12 +336,17 @@ export function SettingsDrawer({
     .map(([label, model]) => [label, String(model || '').trim()])
     .filter(([, model]) => model);
 
-  const reasoningSupportedPairs = modeModelPairs.filter(([, model]) =>
-    supportsReasoningEffort(model, selectedProfile.protocol || 'chat'),
-  );
-  const reasoningUnsupportedPairs = modeModelPairs.filter(
-    ([, model]) => !supportsReasoningEffort(model, selectedProfile.protocol || 'chat'),
-  );
+  const reasoningResolutions = modeModelPairs.map(([label, model]) => [
+    label,
+    model,
+    resolveReasoningEffort(
+      selectedProfile.reasoningEffort || '',
+      model,
+      selectedProfile.protocol || 'chat',
+    ),
+  ]);
+  const reasoningSupportedPairs = reasoningResolutions.filter(([, , res]) => res.supported);
+  const reasoningUnsupportedPairs = reasoningResolutions.filter(([, , res]) => !res.supported);
 
   const isUnlimitedRounds = draft.maxToolRounds === 0;
   const hasGlobalChanges =
@@ -1052,7 +1058,24 @@ export function SettingsDrawer({
                             '。属于此连接，不依赖聊天模型，未填写模型时也可以先选好；留空则不发送任何推理参数。',
                             reasoningSupportedPairs.length > 0 &&
                               ` 会用于：${reasoningSupportedPairs
-                                .map(([mLabel, mId]) => `${mLabel}「${mId}」`)
+                                .map(([mLabel, mId, res]) => {
+                                  if (res.clamped) {
+                                    const reqLabel =
+                                      getReasoningLevelMeta(res.requested)?.label || res.requested;
+                                    const effLabel =
+                                      getReasoningLevelMeta(res.effective)?.label || res.effective;
+                                    return `${mLabel}「${mId}」（不支持${reqLabel}，将自动按${effLabel}发送）`;
+                                  }
+                                  if (res.effective) {
+                                    const effLabel =
+                                      getReasoningLevelMeta(res.effective)?.label || res.effective;
+                                    return `${mLabel}「${mId}」（${effLabel}）`;
+                                  }
+                                  const capText = res.supportedIds
+                                    .map((id) => getReasoningLevelMeta(id)?.label || id)
+                                    .join('/');
+                                  return `${mLabel}「${mId}」（支持：${capText}）`;
+                                })
                                 .join('、')}。`,
                             reasoningUnsupportedPairs.length > 0 &&
                               ` ${reasoningUnsupportedPairs

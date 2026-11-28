@@ -56,9 +56,11 @@ import {
   describeTokenMetrics,
   formatCompactNumber,
   formatSkillLength,
+  getReasoningLevelMeta,
+  getSupportedReasoningLevels,
   isProfileConfigured,
   normalizeReasoningEffort,
-  supportsReasoningEffort,
+  resolveReasoningEffort,
   validateSkillDraft,
 } from './model-utils.js';
 
@@ -411,10 +413,21 @@ export function ReasoningEffortPicker({
   const menuId = React.useId();
 
   const normalizedValue = normalizeReasoningEffort(value);
-  const activeLabel = REASONING_LEVELS.find((item) => item.id === normalizedValue)?.label;
   const trimmedModel = String(model || '').trim();
+  const supportedLevels =
+    mode === 'image' ? [] : getSupportedReasoningLevels(trimmedModel, protocol);
+  const supportedIds = new Set(supportedLevels.map((item) => item.id));
   const isModelSupported =
-    mode !== 'image' && Boolean(trimmedModel) && supportsReasoningEffort(trimmedModel, protocol);
+    mode !== 'image' && Boolean(trimmedModel) && supportedLevels.length > 0;
+  const resolution =
+    mode === 'image'
+      ? { requested: normalizedValue, effective: '', supported: false, clamped: false, supportedIds: [] }
+      : resolveReasoningEffort(normalizedValue, trimmedModel, protocol);
+  const activeMeta = getReasoningLevelMeta(normalizedValue);
+  const effectiveMeta = getReasoningLevelMeta(resolution.effective);
+  const activeLabel = activeMeta?.label || '';
+  const isClamped =
+    isModelSupported && Boolean(normalizedValue) && resolution.clamped && Boolean(effectiveMeta);
 
   const inactiveReason =
     !normalizedValue || isModelSupported
@@ -424,6 +437,10 @@ export function ReasoningEffortPicker({
         : trimmedModel
           ? `当前模型「${trimmedModel}」不支持，暂不发送`
           : '当前模式未配置模型，配置后生效';
+
+  const clampedReason = isClamped
+    ? `当前模型「${trimmedModel}」不支持${activeLabel}（${normalizedValue}），实际按${effectiveMeta.label}（${resolution.effective}）发送`
+    : '';
 
   useReasoningMenuPosition(React, open, triggerRef, containerRef, menuRef);
 
@@ -440,7 +457,10 @@ export function ReasoningEffortPicker({
     };
     document.addEventListener('pointerdown', onPointerDown);
     document.addEventListener('keydown', onKeyDown);
-    menuRef.current?.querySelector('[aria-checked="true"]')?.focus();
+    (
+      menuRef.current?.querySelector('[aria-checked="true"]:not(:disabled)') ||
+      menuRef.current?.querySelector('[role="menuitemradio"]:not(:disabled)')
+    )?.focus();
     return () => {
       document.removeEventListener('pointerdown', onPointerDown);
       document.removeEventListener('keydown', onKeyDown);
@@ -456,7 +476,7 @@ export function ReasoningEffortPicker({
 
   const handleMenuKeyDown = (ev) => {
     const items = Array.from(
-      menuRef.current?.querySelectorAll('[role="menuitemradio"]') || [],
+      menuRef.current?.querySelectorAll('[role="menuitemradio"]:not(:disabled)') || [],
     );
     if (!items.length) return;
     const cur = items.indexOf(document.activeElement);
@@ -473,16 +493,31 @@ export function ReasoningEffortPicker({
     if (ev.key === 'Tab') setOpen(false);
   };
 
+  const fullTriggerLabel = !activeLabel
+    ? '思考·默认'
+    : isClamped
+      ? `思考·${activeLabel}→${effectiveMeta.label}`
+      : `思考·${activeLabel}`;
+  const compactTriggerLabel = !activeLabel
+    ? '默认'
+    : isClamped
+      ? `${activeLabel}→${effectiveMeta.label}`
+      : activeLabel;
+
   const titleTooltip =
     [
       activeLabel
         ? `当前推理等级：${activeLabel}（${normalizedValue}）`
         : '当前使用模型默认推理等级',
-      inactiveReason,
+      clampedReason || inactiveReason,
       hasRunning ? '切换从下一条消息生效' : '',
     ]
       .filter(Boolean)
       .join('。') + '。';
+
+  const supportedSummary = supportedLevels
+    .map((item) => `${item.label}（${item.id}）`)
+    .join('、');
 
   return jsxs('div', {
     className: 'reasoning-control',
@@ -491,10 +526,10 @@ export function ReasoningEffortPicker({
       jsxs('button', {
         type: 'button',
         ref: triggerRef,
-        className: `reasoning-trigger${normalizedValue ? ' active' : ''}${inactiveReason ? ' inactive' : ''}`,
+        className: `reasoning-trigger${normalizedValue ? ' active' : ''}${inactiveReason ? ' inactive' : ''}${isClamped ? ' clamped' : ''}`,
         disabled: disabled || busy,
         onClick: () => setOpen((prev) => !prev),
-        'aria-label': `推理等级：${activeLabel ? `${activeLabel}（${normalizedValue}）` : '模型默认'}${inactiveReason ? `，${inactiveReason}` : ''}`,
+        'aria-label': `推理等级：${activeLabel ? `${activeLabel}（${normalizedValue}）` : '模型默认'}${clampedReason || inactiveReason ? `，${clampedReason || inactiveReason}` : ''}`,
         'aria-haspopup': 'menu',
         'aria-expanded': open,
         'aria-controls': menuId,
@@ -505,11 +540,11 @@ export function ReasoningEffortPicker({
             : jsx(Brain, { size: 13 }),
           jsx('span', {
             className: 'reasoning-label-full',
-            children: activeLabel ? `思考·${activeLabel}` : '思考·默认',
+            children: fullTriggerLabel,
           }),
           jsx('span', {
             className: 'reasoning-label-compact',
-            children: activeLabel || '默认',
+            children: compactTriggerLabel,
           }),
           jsx(ChevronDown, { size: 12 }),
         ],
@@ -540,6 +575,18 @@ export function ReasoningEffortPicker({
                       ? `当前模型「${trimmedModel}」不被识别为支持推理等级，向它发送的请求不带此参数；切换到支持的模型后自动生效。`
                       : '当前模式还没有配置模型。可以先选好等级，配置支持推理的模型后自动生效。',
               }),
+            isClamped &&
+              jsx('div', {
+                className: 'reasoning-menu-note',
+                children: `当前模型「${trimmedModel}」不支持「${activeLabel}（${normalizedValue}）」，发送请求时将自动按「${effectiveMeta.label}（${resolution.effective}）」发送；切回支持该档位的模型后自动恢复。`,
+              }),
+            isModelSupported &&
+              !isClamped &&
+              supportedLevels.length < REASONING_LEVELS.length &&
+              jsx('div', {
+                className: 'reasoning-menu-note',
+                children: `当前模型「${trimmedModel}」支持：${supportedSummary}。`,
+              }),
             jsxs('button', {
               type: 'button',
               role: 'menuitemradio',
@@ -560,34 +607,47 @@ export function ReasoningEffortPicker({
                 }),
               ],
             }),
-            REASONING_LEVELS.map((lvl) =>
-              jsxs(
+            REASONING_LEVELS.map((lvl) => {
+              const levelSupported = !isModelSupported || supportedIds.has(lvl.id);
+              const isSelected = normalizedValue === lvl.id;
+              return jsxs(
                 'button',
                 {
                   type: 'button',
                   role: 'menuitemradio',
-                  'aria-checked': normalizedValue === lvl.id,
-                  className: `reasoning-option${normalizedValue === lvl.id ? ' selected' : ''}`,
+                  'aria-checked': isSelected,
+                  className: `reasoning-option${isSelected ? ' selected' : ''}${levelSupported ? '' : ' unsupported'}`,
                   onClick: () => handleChoose(lvl.id),
-                  disabled: disabled || busy,
+                  disabled: disabled || busy || !levelSupported,
+                  title: levelSupported
+                    ? lvl.description
+                    : `当前模型「${trimmedModel}」不支持 ${lvl.label}（${lvl.id}）`,
                   children: [
                     jsxs('span', {
                       children: [
                         jsxs('strong', {
-                          children: [lvl.label, jsx('em', { children: lvl.id })],
+                          children: [
+                            lvl.label,
+                            jsx('em', { children: lvl.id }),
+                            !levelSupported &&
+                              jsx('span', {
+                                className: 'reasoning-unsupported-badge',
+                                children: '此模型不支持',
+                              }),
+                          ],
                         }),
                         jsx('small', { children: lvl.description }),
                       ],
                     }),
                     jsx('span', {
                       className: 'reasoning-check',
-                      children: normalizedValue === lvl.id && jsx(Check, { size: 14 }),
+                      children: isSelected && jsx(Check, { size: 14 }),
                     }),
                   ],
                 },
                 lvl.id,
-              ),
-            ),
+              );
+            }),
           ],
         }),
     ],

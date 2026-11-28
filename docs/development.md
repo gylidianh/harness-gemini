@@ -1,6 +1,6 @@
 # 源码与开发
 
-对应 Harness Gemini 2.0.3。返回 [项目首页](../README.md)。
+对应 Harness Gemini 2.0.4。返回 [项目首页](../README.md)。
 
 ## 包含哪些内容
 
@@ -16,7 +16,7 @@ tools/           开发启动、校验与打包工具
 tests/           使用独立临时数据的服务测试
 ```
 
-应用文件与已发布的 2.0.3 程序归档一致。`SOURCE-MANIFEST.json` 保存原始文件的 SHA-256，不包含本机路径；依赖通过锁文件安装，`node_modules` 不入库。
+应用文件与已发布的 2.0.4 程序归档一致。`SOURCE-MANIFEST.json` 保存原始文件的 SHA-256，不包含本机路径；依赖通过锁文件安装，`node_modules` 不入库。
 
 前端源码在 `app/ui/`：从仓库根目录执行 `npm run build:ui --prefix app` 生成 `app/dist/`。
 
@@ -29,7 +29,7 @@ git clone https://github.com/gylidianh/harness-gemini.git
 cd harness-gemini
 ```
 
-`v1.3.10` 标签在源码上传前已发布，保持原样；已发布的 `v1.4.4` 和本次 `v2.0.3` 标签都指向对应源码。
+`v1.3.10` 标签在源码上传前已发布，保持原样；已发布的 `v1.4.4` 和本次 `v2.0.4` 标签都指向对应源码。
 
 ## 环境与安装
 
@@ -77,7 +77,7 @@ npm test
 ```
 
 - `check` 检查源码中的本机路径、疑似凭据、意外数据文件和 JavaScript 语法。
-- `verify:release` 比对应用文件与已发布 2.0.3 归档的校验值。代码修改后出现差异是预期结果。
+- `verify:release` 比对应用文件与已发布 2.0.4 归档的校验值。代码修改后出现差异是预期结果。
 - `test` 启动独立临时服务，验证版本、界面资源、配置掩码和会话创建，不请求外部模型。
 
 可在 Windows 上运行 `npm run smoke:desktop` 做桌面集成自检。结果保存在独立 `.local-data/smoke-*/report.json`。桌宠置顶等检查受桌面环境影响；应查看具体检查结果，不能把部分通过当作全部通过。
